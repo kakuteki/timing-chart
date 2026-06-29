@@ -50,6 +50,9 @@ export function Toolbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Close the bridge connection if the toolbar ever unmounts.
+  useEffect(() => () => bridgeDisconnect(), [])
+
   const addClock = () => {
     const ticks = maxTicks(model)
     const wave = clockWave(clockKind, ticks)

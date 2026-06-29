@@ -70,8 +70,11 @@ curl -s -X POST http://localhost:51123/model \
   -d '{"signal":[{"name":"clk","wave":"P.P.P."},{"name":"d","wave":"x=.=.x","data":["A","B"]}]}'
 ```
 
-ポートは `BRIDGE_PORT` 環境変数で変更可（既定 51123）。公開サイト(HTTPS)から
-`http://localhost` への接続はChromeでは通りますが、確実なのはローカル運用です。
+ポートは `BRIDGE_PORT` 環境変数で変更可（既定 51123）。サーバは **127.0.0.1 のみ**
+で待ち受け（LANには出しません）、CORSは localhost と本リポジトリの GitHub Pages
+オリジンに限定しています。公開サイト(HTTPS)から `http://localhost` への接続は
+**Chrome/Edge/Firefox では通りますが Safari はブロック** します。確実なのはローカル
+運用（`npm run bridge` の配信URLを開く）です。
 
 ## GitHub Pages へのデプロイ
 
