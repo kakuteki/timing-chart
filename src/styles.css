@@ -615,6 +615,7 @@ body {
 .grid {
   border-collapse: collapse;
   white-space: nowrap;
+  user-select: none; /* don't select text while drag-painting cells */
 }
 .grid th,
 .grid td {

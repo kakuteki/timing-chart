@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../../state/store'
 import { flattenSignals, maxTicks, type Row } from '../../state/selectors'
 import {
@@ -117,15 +117,18 @@ export function SignalTable() {
       ?.focus()
   }, [focusedCell])
 
+  // Apply a cell edit. Returns the concrete state value that was painted so a
+  // drag can repeat it across cells (null = nothing draggable: extend / cycle /
+  // protected bus / no-op).
   const applyCellAction = (
     path: number[],
     tick: number,
     mods: { altKey: boolean; shiftKey: boolean },
-  ) => {
+  ): string | null => {
     if (mods.altKey) {
-      if (tick === 0) return // tick 0 has nothing to extend from
+      if (tick === 0) return null // tick 0 has nothing to extend from
       applyGuiModel(extendCell(model, path, tick))
-      return
+      return null
     }
     const sig = rowSignalAt(rows, path)
     const cells = expandWave(sig?.wave ?? '')
@@ -133,21 +136,50 @@ export function SignalTable() {
     if (brush === null) {
       // Default: simple High/Low toggle. Protect data-bearing bus cells from a
       // stray click (their label would be lost) — change those via the picker.
-      if (isBusState(cur)) return
-      applyGuiModel(setCellState(model, path, tick, cur === '1' ? '0' : '1'))
-      return
+      if (isBusState(cur)) return null
+      const v = cur === '1' ? '0' : '1'
+      applyGuiModel(setCellState(model, path, tick, v))
+      return v
     }
     if (brush === 'cycle') {
       const next = cycle(cur, mods.shiftKey ? -1 : 1)
-      if (next === cur) return
+      if (next === cur) return null
       applyGuiModel(setCellState(model, path, tick, next))
-      return
+      return null // cycle is per-click, not a paintable run
     }
     // Paint the selected state. Missing/extension cells stay paintable so e.g.
     // a Low brush can draw on a short signal's tail.
     const c = cells[tick]
-    if (c && c.head && c.value === brush) return
+    if (c && c.head && c.value === brush) return brush
     applyGuiModel(setCellState(model, path, tick, brush))
+    return brush
+  }
+
+  // Drag-to-paint: hold and sweep to set a run of cells to one state.
+  const dragValue = useRef<string | null>(null)
+  useEffect(() => {
+    const stop = () => (dragValue.current = null)
+    window.addEventListener('mouseup', stop)
+    return () => window.removeEventListener('mouseup', stop)
+  }, [])
+
+  const onCellMouseDown = (path: number[], tick: number, sigIndex: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault() // don't start a text selection while sweeping
+    setSelectedPath(path)
+    setFocusedCell({ r: sigIndex, t: tick })
+    dragValue.current = applyCellAction(path, tick, { altKey: e.altKey, shiftKey: e.shiftKey })
+  }
+
+  const onCellEnter = (path: number[], tick: number) => {
+    const v = dragValue.current
+    if (v === null) return
+    const sig = rowSignalAt(rows, path)
+    const cells = expandWave(sig?.wave ?? '')
+    const c = cells[tick]
+    if (brush === null && isBusState(c?.value ?? '')) return // keep protecting bus
+    if (c && c.head && c.value === v) return // already that — no churn
+    applyGuiModel(setCellState(model, path, tick, v), true) // coalesce the sweep into one undo
   }
 
   // Only arrows are handled here. Enter/Space are intentionally NOT intercepted:
@@ -364,8 +396,15 @@ export function SignalTable() {
                           tabIndex={isFocused ? 0 : -1}
                           cellId={`${sigIndex}-${t}`}
                           onKeyDown={(e) => onCellKeyDown(sigIndex, t, e)}
-                          onClick={(e) => {
+                          onMouseDown={(e) => {
                             e.stopPropagation()
+                            onCellMouseDown(row.path, t, sigIndex, e)
+                          }}
+                          onMouseEnter={() => onCellEnter(row.path, t)}
+                          onClick={(e) => {
+                            // Mouse already handled via mousedown/drag; only act on
+                            // keyboard activation (Enter/Space → click with detail 0).
+                            if (e.detail !== 0) return
                             setSelectedPath(row.path)
                             setFocusedCell({ r: sigIndex, t })
                             applyCellAction(row.path, t, { altKey: e.altKey, shiftKey: e.shiftKey })
@@ -382,10 +421,10 @@ export function SignalTable() {
       </div>
       <p className="hint">
         {brush === null
-          ? '👆 マスをクリックで High（オン）/ Low（オフ）を切り替え。Alt+クリックで直前を延長。'
+          ? '👆 マスをクリックで High（オン）/ Low（オフ）を切り替え。ドラッグで連続して塗れます。Alt+クリックで直前を延長。'
           : brush === 'cycle'
             ? '順送りモード：クリックで状態が一巡（Shift+クリックで戻す）。'
-            : `「${BRUSH_LABEL[brush] ?? brush}」を置きます：マスをクリックで適用。「High/Low切替」に戻すと通常編集。`}
+            : `「${BRUSH_LABEL[brush] ?? brush}」を置きます：マスをクリック／ドラッグで連続適用。「High/Low切替」に戻すと通常編集。`}
         <br />
         <span className="hint-sub">
           キーボード: 矢印=移動 / Enter・Space=適用 / Alt+Enter=延長
