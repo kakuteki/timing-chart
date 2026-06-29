@@ -633,6 +633,13 @@ body {
 .name-col {
   min-width: 90px;
   padding: 2px 4px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--panel);
+}
+.grid thead .name-col {
+  background: var(--bg);
 }
 .name-input {
   width: 100%;
@@ -726,7 +733,8 @@ body {
   border: none;
   background: transparent;
   cursor: pointer;
-  touch-action: none; /* let touch sweeps paint instead of scrolling */
+  /* Allow vertical page scroll on touch; horizontal moves go to drag-paint. */
+  touch-action: pan-y;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1054,5 +1062,32 @@ body {
   }
   .name-input {
     min-width: 92px;
+  }
+  /* 16px inputs so iOS Safari doesn't auto-zoom on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  /* Bigger tap targets for the per-row / per-group controls. */
+  .row-controls button,
+  .group-controls button {
+    min-width: 32px;
+    height: 32px;
+    font-size: 13px;
+    padding: 0 4px;
+  }
+  .ctrl-col {
+    width: auto;
+  }
+  /* The state picker becomes a single horizontal-scroll row (not sticky) so it
+     doesn't eat the small vertical space. */
+  .state-picker {
+    position: static;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .state-picker .palette-btn {
+    flex: 0 0 auto;
   }
 }
