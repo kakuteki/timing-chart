@@ -537,6 +537,10 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
   const applyGuiModel = useEditor((s) => s.applyGuiModel)
   const setSelectedPath = useEditor((s) => s.setSelectedPath)
   const flash = useEditor((s) => s.flash)
+  // On phones these 4 buttons otherwise eat the row's whole width and crowd out
+  // the waveform cells; collapse them behind a ⋯ toggle (CSS shows the toggle
+  // only on mobile — on desktop the buttons stay inline as before).
+  const [open, setOpen] = useState(false)
   // Indices shift on remove/move, so any held selection would now point at a
   // different signal — deselect to avoid silently editing the wrong row.
   const restructure = (next: ReturnType<typeof moveRow>) => {
@@ -551,43 +555,54 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
   return (
     <span className="row-controls" onClick={(e) => e.stopPropagation()}>
       <button
-        onClick={() => restructure(moveRow(model, path, -1))}
-        disabled={!canUp}
-        title="上へ"
-        aria-label="信号を上へ移動"
+        className="row-actions-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-label="この行の操作"
+        aria-expanded={open}
+        title="操作（移動・クロック化・削除）"
       >
-        ▲
+        ⋯
       </button>
-      <button
-        onClick={() => restructure(moveRow(model, path, 1))}
-        disabled={!canDown}
-        title="下へ"
-        aria-label="信号を下へ移動"
-      >
-        ▼
-      </button>
-      {isSignal && (
+      <span className={open ? 'row-actions open' : 'row-actions'}>
+        <button
+          onClick={() => restructure(moveRow(model, path, -1))}
+          disabled={!canUp}
+          title="上へ"
+          aria-label="信号を上へ移動"
+        >
+          ▲
+        </button>
+        <button
+          onClick={() => restructure(moveRow(model, path, 1))}
+          disabled={!canDown}
+          title="下へ"
+          aria-label="信号を下へ移動"
+        >
+          ▼
+        </button>
+        {isSignal && (
+          <button
+            onClick={() => {
+              applyGuiModel(makeClock(model, path))
+              flash('クロック（周期信号）にしました（「戻す」で元に戻せます）')
+            }}
+            title="この信号をクロック（周期信号）にする"
+            aria-label="この信号をクロックにする"
+          >
+            ⎍
+          </button>
+        )}
         <button
           onClick={() => {
-            applyGuiModel(makeClock(model, path))
-            flash('クロック（周期信号）にしました（「戻す」で元に戻せます）')
+            restructure(removeRow(model, path))
+            flash('削除しました（「戻す」で元に戻せます）')
           }}
-          title="この信号をクロック（周期信号）にする"
-          aria-label="この信号をクロックにする"
+          title="削除"
+          aria-label="この信号を削除"
         >
-          ⎍
+          ×
         </button>
-      )}
-      <button
-        onClick={() => {
-          restructure(removeRow(model, path))
-          flash('削除しました（「戻す」で元に戻せます）')
-        }}
-        title="削除"
-        aria-label="この信号を削除"
-      >
-        ×
-      </button>
+      </span>
     </span>
   )
 }

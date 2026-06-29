@@ -689,6 +689,16 @@ body {
 .row-controls {
   display: inline-flex;
   gap: 1px;
+  position: relative; /* anchor for the mobile actions popover */
+}
+.row-actions {
+  display: inline-flex;
+  gap: 1px;
+}
+/* The ⋯ toggle only exists to collapse the controls on phones (see media
+   query); on desktop the action buttons stay inline, so hide it here. */
+.row-actions-toggle {
+  display: none;
 }
 .row-controls button {
   padding: 1px 4px;
@@ -1171,6 +1181,30 @@ body {
   .row-controls button:last-child,
   .group-controls button:last-child {
     margin-left: 10px;
+  }
+  /* Collapse the per-row controls behind a single ⋯ so the waveform cells get
+     the screen width instead of 4 buttons. The actions open as a popover that
+     floats over the grid rather than pushing it. */
+  .row-actions-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .row-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 6;
+    gap: 6px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  }
+  .row-actions.open {
+    display: inline-flex;
   }
   .ctrl-col {
     width: auto;
