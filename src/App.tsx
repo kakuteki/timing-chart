@@ -12,16 +12,21 @@ export default function App() {
   // browser's native field-level undo keeps working inside the editors.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = document.activeElement
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return
+      const el = document.activeElement as HTMLElement | null
+      // Let native field-level undo win inside any editable element.
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+      if (e.isComposing) return // mid-IME composition
       if (!(e.ctrlKey || e.metaKey)) return
       const k = e.key.toLowerCase()
+      const st = useEditor.getState()
       if (k === 'z' && !e.shiftKey) {
+        if (st.past.length === 0) return // nothing to undo — don't swallow the key
         e.preventDefault()
-        useEditor.getState().undo()
+        st.undo()
       } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+        if (st.future.length === 0) return
         e.preventDefault()
-        useEditor.getState().redo()
+        st.redo()
       }
     }
     window.addEventListener('keydown', onKey)

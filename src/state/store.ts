@@ -115,6 +115,12 @@ function histPush(state: EditorState): Pick<EditorState, 'past' | 'future'> {
   return { past: [...state.past, state.model].slice(-HISTORY_CAP), future: [] }
 }
 
+// True when the latest model change came from a text commit. Used to coalesce a
+// run of debounced text commits into a single undo step. (editSource can't be
+// used: setText flips it to 'typing' before every commit, so it can neither
+// detect a continuation nor distinguish the first commit of a session.)
+let lastChangeWasText = false
+
 export const useEditor = create<EditorState>((set, get) => ({
   model: startModel,
   lastValidModel: startModel,
@@ -130,6 +136,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   applyGuiModel: (model) => {
     detachShareHash() // first edit after opening a share link → own working copy
+    lastChangeWasText = false
     set((state) => ({
       ...histPush(state),
       model,
@@ -146,30 +153,41 @@ export const useEditor = create<EditorState>((set, get) => ({
   commitText: () => {
     const { textBuffer } = get()
     const res = parseModel(textBuffer)
-    if (res.ok && res.model) {
-      detachShareHash()
-      // Promote to model but DO NOT rewrite textBuffer — the user owns it.
-      set((state) => ({
-        ...histPush(state),
-        model: res.model!,
-        lastValidModel: res.model!,
-        editSource: 'text',
-        parseError: null,
-        skinName: (res.model!.config?.skin as SkinName) ?? state.skinName,
-        // A text edit may have removed/reordered/inserted signals — drop the
-        // selection unless it still points at the same signal.
-        selectedPath: selectionSurvives(state.selectedPath, state.model, res.model!)
-          ? state.selectedPath
-          : null,
-      }))
-    } else {
+    if (!(res.ok && res.model)) {
       set({ parseError: res.error ?? 'パースに失敗しました' })
+      return
     }
+    const state = get()
+    // No-op: the text reduces to the current model (blur with no real edit, or
+    // a formatting-only change) — don't pollute history / autosave.
+    if (serializeModel(res.model) === serializeModel(state.model)) {
+      set({ parseError: null, editSource: 'text' })
+      return
+    }
+    detachShareHash()
+    // Coalesce a run of text-edit commits into ONE undo step: only the first
+    // commit of a text-editing session records history (debounced typing would
+    // otherwise flood the 50-entry stack and evict earlier GUI/load undo points).
+    const coalesce = lastChangeWasText
+    lastChangeWasText = true
+    set((s) => ({
+      ...(coalesce ? {} : histPush(s)),
+      model: res.model!,
+      lastValidModel: res.model!,
+      editSource: 'text',
+      parseError: null,
+      // model.config.skin is the single source of truth for the skin.
+      skinName: (res.model!.config?.skin as SkinName) ?? 'default',
+      // A text edit may have removed/reordered/inserted signals — drop the
+      // selection unless it still points at the same signal.
+      selectedPath: selectionSurvives(s.selectedPath, s.model, res.model!) ? s.selectedPath : null,
+    }))
   },
 
   setTextFocused: (focused) => set({ textFocused: focused }),
 
-  loadModel: (model) =>
+  loadModel: (model) => {
+    lastChangeWasText = false
     set((state) => ({
       ...histPush(state),
       model,
@@ -177,15 +195,17 @@ export const useEditor = create<EditorState>((set, get) => ({
       textBuffer: serializeModel(model),
       editSource: 'load',
       parseError: null,
-      skinName: (model.config?.skin as SkinName) ?? state.skinName,
+      skinName: (model.config?.skin as SkinName) ?? 'default',
       // Fresh document — clear any selection pointing into the old one.
       selectedPath: null,
-    })),
+    }))
+  },
 
   // Skin is part of the model so it survives share/save/reload (the renderer
   // injects config.skin from skinName; keep both in sync here).
   setSkin: (skin) => {
     detachShareHash()
+    lastChangeWasText = false
     set((state) => {
       const model = { ...state.model, config: { ...state.model.config, skin } }
       return {
@@ -203,7 +223,8 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   clearNotice: () => set({ notice: null }),
 
-  undo: () =>
+  undo: () => {
+    lastChangeWasText = false
     set((state) => {
       if (state.past.length === 0) return {}
       const prev = state.past[state.past.length - 1]
@@ -219,9 +240,11 @@ export const useEditor = create<EditorState>((set, get) => ({
         future: [...state.future, state.model],
         selectedPath: selectionSurvives(state.selectedPath, state.model, prev) ? state.selectedPath : null,
       }
-    }),
+    })
+  },
 
-  redo: () =>
+  redo: () => {
+    lastChangeWasText = false
     set((state) => {
       if (state.future.length === 0) return {}
       const next = state.future[state.future.length - 1]
@@ -236,7 +259,8 @@ export const useEditor = create<EditorState>((set, get) => ({
         future: state.future.slice(0, -1),
         selectedPath: selectionSurvives(state.selectedPath, state.model, next) ? state.selectedPath : null,
       }
-    }),
+    })
+  },
 }))
 
 // Autosave the canonical model so a reload/accidental close doesn't lose work.
