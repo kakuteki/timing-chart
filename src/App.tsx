@@ -48,6 +48,18 @@ export default function App() {
     }
   }
 
+  // While the help dialog is open, make the rest of the app inert so screen
+  // readers and Tab/clicks can't reach the background behind the modal.
+  useEffect(() => {
+    const regions = ['.toolbar', '.tabbar', '.workspace']
+    for (const sel of regions) {
+      document.querySelector(sel)?.toggleAttribute('inert', helpOpen)
+    }
+    return () => {
+      for (const sel of regions) document.querySelector(sel)?.removeAttribute('inert')
+    }
+  }, [helpOpen])
+
   // Selected signal's bus segments / name + edge count → drive panel discovery.
   const selSig = selectedPath
     ? flattenSignals(model).find(

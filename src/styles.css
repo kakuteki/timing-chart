@@ -657,6 +657,10 @@ body {
   font-weight: 500;
   font-size: 11px;
   background: var(--bg);
+  /* Keep the cycle-number row visible while scrolling many signals. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 .name-col {
   min-width: 90px;
@@ -668,6 +672,9 @@ body {
 }
 .grid thead .name-col {
   background: var(--bg);
+  /* The corner cell sticks on BOTH axes; keep it above the other sticky cells. */
+  top: 0;
+  z-index: 4;
 }
 .name-input {
   width: 100%;
@@ -774,8 +781,10 @@ body {
   border: none;
   background: transparent;
   cursor: pointer;
-  /* Allow vertical page scroll on touch; horizontal moves go to drag-paint. */
-  touch-action: pan-y;
+  /* Let touch pan the grid in BOTH directions so wide charts stay reachable on
+     phones; a tap (not a pan) still edits one cell. Mouse drag-paint is
+     unaffected (it preventDefaults in JS, see onCellPointerDown). */
+  touch-action: auto;
   display: flex;
   align-items: center;
   justify-content: center;
