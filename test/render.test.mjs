@@ -72,6 +72,26 @@ function isValidLane(lane) {
   return true
 }
 
+// Mirror src/export/svg.ts addFontFallback (pure string op; TS source not
+// importable here). Guards the regex against over-/under-matching.
+function addFontFallback(svgString) {
+  return svgString.replace(
+    /font-family\s*:\s*Helvetica(?![\w,-])/gi,
+    'font-family:Helvetica,Arial,"Liberation Sans",sans-serif',
+  )
+}
+
+test('font fallback appends a portable stack to bare Helvetica', () => {
+  assert.equal(
+    addFontFallback('text{font-family:Helvetica}'),
+    'text{font-family:Helvetica,Arial,"Liberation Sans",sans-serif}',
+  )
+  // already-stacked (comma after Helvetica) or unrelated families are untouched
+  const stacked = 'text{font-family:Helvetica,Arial,sans-serif}'
+  assert.equal(addFontFallback(stacked), stacked)
+  assert.equal(addFontFallback('text{font-family:Menlo}'), 'text{font-family:Menlo}')
+})
+
 test('lane validation rejects the crash-inducing shapes', () => {
   assert.equal(isValidLane({ name: 'a', wave: 5 }), false) // non-string wave → expandWave crash
   assert.equal(isValidLane({ name: 'a', wave: '01', data: 5 }), false) // non-array data → split crash
