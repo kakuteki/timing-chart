@@ -41,6 +41,7 @@ const PRIMARY: { v: Brush; label: string }[] = [
   { v: '0', label: 'Low（オフ）' },
   { v: 'p', label: 'クロック' },
   { v: '=', label: 'バス（値）' },
+  { v: 'extend', label: '→ 延長' },
 ]
 const DETAIL: { v: string; label: string }[] = [
   { v: 'x', label: '不定 X（未確定）' },
@@ -84,6 +85,7 @@ export function SignalTable() {
   const applyGuiModel = useEditor((s) => s.applyGuiModel)
   const selectedPath = useEditor((s) => s.selectedPath)
   const setSelectedPath = useEditor((s) => s.setSelectedPath)
+  const flash = useEditor((s) => s.flash)
 
   // Active "brush": when set, clicking a cell paints that state; when null,
   // clicking cycles through the common states (the default behavior).
@@ -96,6 +98,14 @@ export function SignalTable() {
     setBrush(null)
     setFocusedCell(null)
   }, [loadEpoch])
+  // Esc clears the active paint brush (back to High/Low切替).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBrush(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const rows = flattenSignals(model)
   const ticks = maxTicks(model)
@@ -127,10 +137,10 @@ export function SignalTable() {
     mods: { altKey: boolean; shiftKey: boolean },
     coalesceKey: boolean | string = false,
   ): string | null => {
-    if (mods.altKey) {
+    if (mods.altKey || brush === 'extend') {
       if (tick === 0) return null // tick 0 has nothing to extend from
       applyGuiModel(extendCell(model, path, tick), coalesceKey)
-      return null
+      return '__extend__' // lets a drag keep extending across the run
     }
     const sig = rowSignalAt(rows, path)
     const cells = expandWave(sig?.wave ?? '')
@@ -138,7 +148,10 @@ export function SignalTable() {
     if (brush === null) {
       // Default: simple High/Low toggle. Protect data-bearing bus cells from a
       // stray click (their label would be lost) — change those via the picker.
-      if (isBusState(cur)) return null
+      if (isBusState(cur)) {
+        flash('ここはバス区間です。下の「バス値」で値を編集できます')
+        return null
+      }
       const v = cur === '1' ? '0' : '1'
       applyGuiModel(setCellState(model, path, tick, v), coalesceKey)
       return v
@@ -175,6 +188,11 @@ export function SignalTable() {
       const m = useEditor.getState().model
       const row = flattenSignals(m).filter((x) => x.kind === 'signal')[r]
       if (!row?.signal) return
+      if (v === '__extend__') {
+        if (t === 0) return
+        useEditor.getState().applyGuiModel(extendCell(m, row.path, t), dragKey.current)
+        return
+      }
       const cell = expandWave(row.signal.wave ?? '')[t]
       if ((v === '0' || v === '1') && isBusState(cell?.value ?? '')) return // protect bus
       if (cell && cell.head && cell.value === v) return
@@ -230,7 +248,14 @@ export function SignalTable() {
         <button onClick={() => applyGuiModel(addGroup(model))}>＋グループ</button>
         <button onClick={() => applyGuiModel(addSpacer(model))}>＋空行</button>
         <span className="sep" />
-        <button onClick={() => applyGuiModel(removeTick(model))} title="時間のコマ（列）を減らす">
+        <button
+          onClick={() => {
+            if (ticks <= 1) return
+            applyGuiModel(removeTick(model))
+            flash('コマを1つ減らしました（「戻す」で復元できます）')
+          }}
+          title="時間のコマ（列）を減らす"
+        >
           − コマ
         </button>
         <span className="tick-count" title="時間のコマ数（横の列数）">
@@ -247,7 +272,9 @@ export function SignalTable() {
           <button
             key={String(v)}
             className={brush === v ? `${brushClasses(v)} active` : brushClasses(v)}
-            onClick={() => setBrush(v)}
+            // Re-clicking a selected brush returns to the default (consistent
+            // with the「もっと」buttons). The default button itself stays null.
+            onClick={() => setBrush(v === null || brush === v ? null : v)}
             aria-pressed={brush === v}
           >
             {label}
@@ -474,6 +501,7 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
   const model = useEditor((s) => s.model)
   const applyGuiModel = useEditor((s) => s.applyGuiModel)
   const setSelectedPath = useEditor((s) => s.setSelectedPath)
+  const flash = useEditor((s) => s.flash)
   // Indices shift on remove/move, so any held selection would now point at a
   // different signal — deselect to avoid silently editing the wrong row.
   const restructure = (next: ReturnType<typeof moveRow>) => {
@@ -481,10 +509,15 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
     setSelectedPath(null)
     applyGuiModel(next)
   }
+  // Gray out the move that would do nothing (already at the top/bottom) so the
+  // button doesn't look broken when nothing happens.
+  const canUp = moveRow(model, path, -1) !== model
+  const canDown = moveRow(model, path, 1) !== model
   return (
     <span className="row-controls" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => restructure(moveRow(model, path, -1))}
+        disabled={!canUp}
         title="上へ"
         aria-label="信号を上へ移動"
       >
@@ -492,6 +525,7 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
       </button>
       <button
         onClick={() => restructure(moveRow(model, path, 1))}
+        disabled={!canDown}
         title="下へ"
         aria-label="信号を下へ移動"
       >
@@ -499,7 +533,10 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
       </button>
       {isSignal && (
         <button
-          onClick={() => applyGuiModel(makeClock(model, path))}
+          onClick={() => {
+            applyGuiModel(makeClock(model, path))
+            flash('クロック（周期信号）にしました（「戻す」で元に戻せます）')
+          }}
           title="この信号をクロック（周期信号）にする"
           aria-label="この信号をクロックにする"
         >
@@ -507,7 +544,10 @@ function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boo
         </button>
       )}
       <button
-        onClick={() => restructure(removeRow(model, path))}
+        onClick={() => {
+          restructure(removeRow(model, path))
+          flash('削除しました（「戻す」で元に戻せます）')
+        }}
         title="削除"
         aria-label="この信号を削除"
       >

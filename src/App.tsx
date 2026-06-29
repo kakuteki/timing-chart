@@ -121,8 +121,13 @@ export default function App() {
     }
   }
 
+  const toast = useEditor((s) => s.toast)
+
   return (
     <div className="app">
+      <span className="app-toast-region" role="status" aria-live="polite">
+        {toast && <span className="app-toast">{toast}</span>}
+      </span>
       {helpOpen && (
         <HelpModal
           onClose={closeHelp}
