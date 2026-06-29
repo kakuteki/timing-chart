@@ -29,31 +29,42 @@ function cycle(value: string, dir: 1 | -1): string {
   return states[(idx + dir + states.length) % states.length]
 }
 
-/** Brush palette: every state authorable by click, incl. bus 2-9 and gap. */
-const PALETTE: { v: string; t: string }[] = [
-  { v: '0', t: 'Low' },
-  { v: '1', t: 'High' },
-  { v: 'p', t: 'クロック正' },
-  { v: 'n', t: 'クロック負' },
-  { v: 'P', t: 'クロック正(矢印)' },
-  { v: 'N', t: 'クロック負(矢印)' },
-  { v: 'x', t: '不定 X' },
-  { v: 'z', t: 'ハイZ' },
-  { v: '=', t: 'バス =' },
-  { v: '2', t: 'バス 2' },
-  { v: '3', t: 'バス 3' },
-  { v: '4', t: 'バス 4' },
-  { v: '5', t: 'バス 5' },
-  { v: '6', t: 'バス 6' },
-  { v: '7', t: 'バス 7' },
-  { v: '8', t: 'バス 8' },
-  { v: '9', t: 'バス 9' },
-  { v: '|', t: 'ギャップ' },
+// Brush model. `null` = the friendly default: click toggles High/Low. 'cycle'
+// = power mode (click steps through all states). Any other value = paint that
+// state. Primary picker is always visible with plain labels; rarer states fold
+// away under "もっと".
+type Brush = string | null
+const PRIMARY: { v: Brush; label: string }[] = [
+  { v: null, label: 'High/Low切替' },
+  { v: '1', label: 'High（オン）' },
+  { v: '0', label: 'Low（オフ）' },
+  { v: 'P', label: 'クロック' },
+  { v: '=', label: 'バス（値）' },
+  { v: 'x', label: '不定 X' },
+  { v: 'z', label: 'Z（切断）' },
+  { v: 'cycle', label: '順送り' },
 ]
+const DETAIL: { v: string; label: string }[] = [
+  { v: 'p', label: 'クロック（矢印なし）' },
+  { v: 'n', label: 'クロック↓' },
+  { v: 'N', label: 'クロック↓（矢印）' },
+  { v: '2', label: 'バス2' },
+  { v: '3', label: 'バス3' },
+  { v: '4', label: 'バス4' },
+  { v: '5', label: 'バス5' },
+  { v: '6', label: 'バス6' },
+  { v: '7', label: 'バス7' },
+  { v: '8', label: 'バス8' },
+  { v: '9', label: 'バス9' },
+  { v: '|', label: 'ギャップ' },
+]
+const BRUSH_LABEL: Record<string, string> = Object.fromEntries(
+  [...PRIMARY, ...DETAIL].filter((b) => b.v !== null).map((b) => [b.v as string, b.label]),
+)
 
-function brushClasses(v: string): string {
+function brushClasses(v: Brush): string {
   if (v === '=') return 'palette-btn state-bus state-bus-eq'
-  if (isBusState(v)) return `palette-btn state-bus state-bus-${v}`
+  if (v && isBusState(v)) return `palette-btn state-bus state-bus-${v}`
   return 'palette-btn'
 }
 
@@ -108,18 +119,22 @@ export function SignalTable() {
     const sig = rowSignalAt(rows, path)
     const cells = expandWave(sig?.wave ?? '')
     const cur = cells[tick]?.value ?? '0'
-    if (brush !== null) {
-      // No-op only when this exact cell already starts that state. A missing
-      // (beyond-wave) or extension cell must still be paintable — otherwise a
-      // '0' brush can't draw on a short signal's tail.
-      const c = cells[tick]
-      if (c && c.head && c.value === brush) return
-      applyGuiModel(setCellState(model, path, tick, brush))
+    if (brush === null) {
+      // Default: simple High/Low toggle. Any odd state resets to High first.
+      applyGuiModel(setCellState(model, path, tick, cur === '1' ? '0' : '1'))
       return
     }
-    const next = cycle(cur, mods.shiftKey ? -1 : 1)
-    if (next === cur) return // unknown state — no-op, don't churn the model
-    applyGuiModel(setCellState(model, path, tick, next))
+    if (brush === 'cycle') {
+      const next = cycle(cur, mods.shiftKey ? -1 : 1)
+      if (next === cur) return
+      applyGuiModel(setCellState(model, path, tick, next))
+      return
+    }
+    // Paint the selected state. Missing/extension cells stay paintable so e.g.
+    // a Low brush can draw on a short signal's tail.
+    const c = cells[tick]
+    if (c && c.head && c.value === brush) return
+    applyGuiModel(setCellState(model, path, tick, brush))
   }
 
   // Only arrows are handled here. Enter/Space are intentionally NOT intercepted:
@@ -160,31 +175,36 @@ export function SignalTable() {
         </button>
       </div>
 
-      <details className="brush-details">
-        <summary>ペン（状態ブラシ）{brush !== null ? `: ${brush}` : ''}</summary>
-        <div className="brush-palette" role="group" aria-label="ペン（状態ブラシ）">
+      <div className="state-picker" role="group" aria-label="置く状態を選ぶ">
+        <span className="state-picker-label">状態:</span>
+        {PRIMARY.map(({ v, label }) => (
           <button
-            className={brush === null ? 'palette-btn active' : 'palette-btn'}
-            onClick={() => setBrush(null)}
-            title="クリックで状態を順送り（既定）"
-            aria-pressed={brush === null}
+            key={String(v)}
+            className={brush === v ? `${brushClasses(v)} active` : brushClasses(v)}
+            onClick={() => setBrush(v)}
+            aria-pressed={brush === v}
           >
-            サイクル
+            {label}
           </button>
-          {PALETTE.map(({ v, t }) => (
-            <button
-              key={v}
-              className={brush === v ? `${brushClasses(v)} active` : brushClasses(v)}
-              onClick={() => setBrush(brush === v ? null : v)}
-              title={t}
-              aria-label={t}
-              aria-pressed={brush === v}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-      </details>
+        ))}
+        <details className="more-states">
+          <summary>もっと</summary>
+          <div className="brush-palette" role="group" aria-label="その他の状態">
+            {DETAIL.map(({ v, label }) => (
+              <button
+                key={v}
+                className={brush === v ? `${brushClasses(v)} active` : brushClasses(v)}
+                onClick={() => setBrush(brush === v ? null : v)}
+                title={label}
+                aria-label={label}
+                aria-pressed={brush === v}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </details>
+      </div>
 
       <div className="table-scroll">
         <table className="grid">
@@ -339,10 +359,14 @@ export function SignalTable() {
       </div>
       <p className="hint">
         {brush === null
-          ? 'クリック=状態送り / Shift+クリック=戻し / Alt+クリック=延長'
-          : `ペン「${brush}」: クリックで適用 / 同じペン再クリックで解除 / Alt+クリック=延長`}
+          ? '👆 マスをクリックで High（オン）/ Low（オフ）を切り替え。Alt+クリックで直前を延長。'
+          : brush === 'cycle'
+            ? '順送りモード：クリックで状態が一巡（Shift+クリックで戻す）。'
+            : `「${BRUSH_LABEL[brush] ?? brush}」を置きます：マスをクリックで適用。「High/Low切替」に戻すと通常編集。`}
         <br />
-        キーボード: 矢印=移動 / Enter・Space=適用 / Shift+Enter=戻し / Alt+Enter=延長
+        <span className="hint-sub">
+          キーボード: 矢印=移動 / Enter・Space=適用 / Alt+Enter=延長
+        </span>
       </p>
     </section>
   )

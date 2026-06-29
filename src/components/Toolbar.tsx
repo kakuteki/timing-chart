@@ -133,10 +133,10 @@ export function Toolbar() {
 
       <div className="tb-group">
         <button onClick={undo} disabled={!canUndo} title="元に戻す (Ctrl+Z)" aria-label="元に戻す">
-          ↶
+          ↶ 戻す
         </button>
         <button onClick={redo} disabled={!canRedo} title="やり直し (Ctrl+Y)" aria-label="やり直し">
-          ↷
+          ↷ やり直し
         </button>
       </div>
 

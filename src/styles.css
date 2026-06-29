@@ -264,6 +264,58 @@ body {
   min-width: 48px;
   text-align: center;
 }
+/* Always-visible, labeled state picker (novice-friendly). */
+.state-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 8px;
+  padding: 8px;
+  background: var(--accent-weak);
+  border: 1px solid #cfe0fb;
+  border-radius: 8px;
+}
+.state-picker-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-right: 2px;
+}
+.state-picker .palette-btn {
+  min-width: auto;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.state-picker .palette-btn.active {
+  outline: 2px solid var(--accent);
+  background: #fff;
+}
+.more-states {
+  display: inline-block;
+}
+.more-states > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--accent);
+  padding: 4px 6px;
+  list-style: none;
+}
+.more-states > summary::-webkit-details-marker {
+  display: none;
+}
+.more-states > summary::before {
+  content: '＋';
+  margin-right: 2px;
+}
+.more-states[open] > summary::before {
+  content: '−';
+}
+.hint-sub {
+  color: var(--muted);
+}
+
 .brush-details {
   margin: 0 0 8px;
 }
