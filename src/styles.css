@@ -715,27 +715,27 @@ body {
     display: none;
   }
 
-  /* Bigger, calmer touch targets. */
+  /* Wrap the toolbar so every action stays visible (no hidden offscreen scroll). */
   .toolbar {
-    gap: 8px;
-    overflow-x: auto;
-    flex-wrap: nowrap;
-  }
-  .toolbar > * {
-    flex: 0 0 auto; /* keep widths; scroll the row instead of squeezing */
+    gap: 8px 10px;
+    flex-wrap: wrap;
   }
   .tabbar button {
     flex: 1;
-    padding: 10px 8px;
+    padding: 11px 8px;
   }
+  /* Bigger, calmer touch targets. */
   .wave-cell,
   .cell-td {
-    width: 34px;
-    height: 36px;
+    width: 36px;
+    height: 38px;
   }
   .palette-btn {
-    min-width: 30px;
-    height: 30px;
+    min-width: 34px;
+    height: 34px;
+  }
+  .panel > summary {
+    padding: 11px 10px;
   }
   .toolbar button,
   .table-toolbar button {
