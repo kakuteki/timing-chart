@@ -10,6 +10,7 @@ const DEBOUNCE_MS = 300
  */
 export function WaveJsonEditor() {
   const textBuffer = useEditor((s) => s.textBuffer)
+  const editSource = useEditor((s) => s.editSource)
   const parseError = useEditor((s) => s.parseError)
   const setText = useEditor((s) => s.setText)
   const commitText = useEditor((s) => s.commitText)
@@ -17,14 +18,17 @@ export function WaveJsonEditor() {
 
   const timer = useRef<number | undefined>(undefined)
 
-  // Debounced commit whenever the buffer changes.
+  // Debounced commit ONLY for user keystrokes. When the buffer changed because
+  // the GUI/load regenerated it (editSource !== 'typing'), it already matches
+  // the model, so re-parsing would needlessly rebuild it and re-render preview.
   useEffect(() => {
+    if (editSource !== 'typing') return
     if (timer.current) window.clearTimeout(timer.current)
     timer.current = window.setTimeout(() => commitText(), DEBOUNCE_MS)
     return () => {
       if (timer.current) window.clearTimeout(timer.current)
     }
-  }, [textBuffer, commitText])
+  }, [textBuffer, editSource, commitText])
 
   return (
     <section className="text-editor">

@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
 import { maxTicks } from '../state/selectors'
+import { uniqueName } from '../state/actions'
 import { clockWave, type ClockKind } from '../model/clockgen'
 import { serializeModel } from '../model/serialize'
 import { parseModel } from '../model/parse'
@@ -17,21 +18,35 @@ export function Toolbar() {
   const loadModel = useEditor((s) => s.loadModel)
   const skinName = useEditor((s) => s.skinName)
   const setSkin = useEditor((s) => s.setSkin)
+  const notice = useEditor((s) => s.notice)
+  const clearNotice = useEditor((s) => s.clearNotice)
 
   const fileRef = useRef<HTMLInputElement>(null)
+  const toastTimer = useRef<number | undefined>(undefined)
   const [clockKind, setClockKind] = useState<ClockKind>('P')
   const [pngScale, setPngScale] = useState(2)
   const [toast, setToast] = useState<string | null>(null)
 
   const flash = (msg: string) => {
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
     setToast(msg)
-    window.setTimeout(() => setToast(null), 2500)
+    toastTimer.current = window.setTimeout(() => setToast(null), 2500)
   }
+
+  // Surface a one-shot startup notice (e.g. broken share link) once.
+  useEffect(() => {
+    if (notice) {
+      flash(notice)
+      clearNotice()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const addClock = () => {
     const ticks = maxTicks(model)
     const wave = clockWave(clockKind, ticks)
-    applyGuiModel({ ...model, signal: [...model.signal, { name: 'clk', wave }] })
+    const name = uniqueName(model, 'clk')
+    applyGuiModel({ ...model, signal: [...model.signal, { name, wave }] })
   }
 
   const exportSvg = () => {
@@ -73,13 +88,19 @@ export function Toolbar() {
   const share = async () => {
     const url = buildShareUrl(model)
     history.replaceState(null, '', url)
+    let copied = false
     try {
       await navigator.clipboard.writeText(url)
-      flash('共有リンクをコピーしました')
+      copied = true
     } catch {
-      flash('URLを更新しました（コピーは手動で）')
+      copied = false
     }
-    if (url.length > 8000) flash('注意: URLが長すぎる可能性があります')
+    // Build one message so a length warning doesn't overwrite the success line.
+    const base = copied ? '共有リンクをコピーしました' : 'URLを更新しました（コピーは手動で）'
+    let suffix = ''
+    if (url.length > 8000) suffix = ' ⚠ リンクが長すぎ、一部環境で開けない場合があります'
+    else if (url.length > 2000) suffix = '（やや長め）'
+    flash(base + suffix)
   }
 
   return (

@@ -31,12 +31,36 @@ export function expandWave(wave: string): Cell[] {
   for (const ch of wave) {
     if (ch === '.') {
       out.push({ value: last, head: false })
+    } else if (ch === '|') {
+      // A gap is an overlay marker: it does NOT change the underlying level,
+      // so following '.' cells must keep inheriting the pre-gap value.
+      out.push({ value: '|', head: true })
     } else {
       out.push({ value: ch, head: true })
       last = ch
     }
   }
   return out
+}
+
+/**
+ * Ticks at which a bus segment STARTS (head + bus state), in left-to-right
+ * order. The k-th entry corresponds to the signal's data[k] label.
+ */
+export function busHeadTicks(wave: string): number[] {
+  const ticks: number[] = []
+  expandWave(wave).forEach((c, i) => {
+    if (c.head && isBusState(c.value)) ticks.push(i)
+  })
+  return ticks
+}
+
+/** Resize a node-marker string to `len` ticks (pad with '.' / truncate). */
+export function resizeNode(node: string, len: number): string {
+  const chars = node.split('')
+  if (chars.length > len) chars.length = len
+  while (chars.length < len) chars.push('.')
+  return chars.join('')
 }
 
 /** Compress a Cell array back into a wave string (lossless inverse of expand). */

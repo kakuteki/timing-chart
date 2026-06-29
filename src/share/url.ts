@@ -15,22 +15,35 @@ export function buildShareUrl(model: WaveJson): string {
   return `${base}#${HASH_KEY}=${encodeShare(model)}`
 }
 
-/**
- * Read a model from the current location hash (#d=…), or null if absent /
- * malformed. Never throws.
- */
-export function decodeShare(): WaveJson | null {
+/** Extract the raw `d=` payload from the location hash, or null. */
+function rawPayload(): string | null {
+  // Parse manually rather than via URLSearchParams: the lz-string alphabet
+  // contains '+', which URLSearchParams would turn into a space.
+  const hash = window.location.hash.replace(/^#/, '')
+  if (!hash) return null
+  for (const part of hash.split('&')) {
+    if (part.startsWith(HASH_KEY + '=')) return part.slice(HASH_KEY.length + 1)
+  }
+  return null
+}
+
+export interface ShareRead {
+  /** True if a `d=` payload was present in the hash at all. */
+  present: boolean
+  /** The decoded model, or null if absent / malformed. */
+  model: WaveJson | null
+}
+
+/** Read a model from the location hash, distinguishing absent from broken. */
+export function readShare(): ShareRead {
+  const payload = rawPayload()
+  if (!payload) return { present: false, model: null }
   try {
-    const hash = window.location.hash.replace(/^#/, '')
-    if (!hash) return null
-    const params = new URLSearchParams(hash)
-    const payload = params.get(HASH_KEY)
-    if (!payload) return null
     const json = decompressFromEncodedURIComponent(payload)
-    if (!json) return null
+    if (!json) return { present: true, model: null }
     const res = parseModel(json)
-    return res.ok && res.model ? res.model : null
+    return { present: true, model: res.ok && res.model ? res.model : null }
   } catch {
-    return null
+    return { present: true, model: null }
   }
 }
