@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useEditor } from '../../state/store'
 import { flattenSignals, maxTicks, type Row } from '../../state/selectors'
 import {
@@ -66,6 +66,10 @@ export function SignalTable() {
   // Active "brush": when set, clicking a cell paints that state; when null,
   // clicking cycles through the common states (the default behavior).
   const [brush, setBrush] = useState<string | null>(null)
+  // Disarm the brush when a new document is loaded so the first click on the
+  // new doc cycles (as expected) instead of painting the stale brush.
+  const loadEpoch = useEditor((s) => s.loadEpoch)
+  useEffect(() => setBrush(null), [loadEpoch])
 
   const rows = flattenSignals(model)
   const ticks = maxTicks(model)
@@ -81,7 +85,11 @@ export function SignalTable() {
     const cells = expandWave(sig?.wave ?? '')
     const cur = cells[tick]?.value ?? '0'
     if (brush !== null) {
-      if (cur === brush) return // already that state — no-op
+      // No-op only when this exact cell already starts that state. A missing
+      // (beyond-wave) or extension cell must still be paintable — otherwise a
+      // '0' brush can't draw on a short signal's tail.
+      const c = cells[tick]
+      if (c && c.head && c.value === brush) return
       applyGuiModel(setCellState(model, path, tick, brush))
       return
     }
@@ -108,7 +116,7 @@ export function SignalTable() {
         </button>
       </div>
 
-      <div className="brush-palette" role="radiogroup" aria-label="ペン（状態ブラシ）">
+      <div className="brush-palette" role="group" aria-label="ペン（状態ブラシ）">
         <span className="brush-label">ペン</span>
         <button
           className={brush === null ? 'palette-btn active' : 'palette-btn'}
@@ -253,7 +261,7 @@ export function SignalTable() {
       <p className="hint">
         {brush === null
           ? 'クリック=状態送り / Shift+クリック=戻し / Alt+クリック=直前を延長'
-          : `ペン「${brush}」: クリックでそのセルに適用 / Alt+クリック=直前を延長`}
+          : `ペン「${brush}」: クリックで適用 / 同じペン再クリックで解除 / Alt+クリック=延長`}
       </p>
     </section>
   )
