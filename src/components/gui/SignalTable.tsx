@@ -7,6 +7,10 @@ import {
   setSignalName,
   addSignal,
   addSpacer,
+  addGroup,
+  setGroupLabel,
+  removeGroup,
+  addSignalToGroup,
   removeRow,
   moveRow,
   addTick,
@@ -92,6 +96,7 @@ export function SignalTable() {
 
       <div className="table-toolbar">
         <button onClick={() => applyGuiModel(addSignal(model))}>＋信号</button>
+        <button onClick={() => applyGuiModel(addGroup(model))}>＋グループ</button>
         <button onClick={() => applyGuiModel(addSpacer(model))}>＋空行</button>
         <span className="sep" />
         <button onClick={() => applyGuiModel(removeTick(model))} title="tickを減らす">
@@ -146,8 +151,35 @@ export function SignalTable() {
               if (row.kind === 'group-label') {
                 return (
                   <tr key={key} className="group-row">
-                    <td colSpan={2 + ticks} style={{ paddingLeft: row.depth * 12 }}>
-                      ▸ {row.label}
+                    <td colSpan={2 + ticks} style={{ paddingLeft: 4 + row.depth * 12 }}>
+                      <span className="group-caret">▸</span>
+                      <input
+                        className="group-input"
+                        aria-label="グループ名"
+                        value={row.label ?? ''}
+                        onChange={(e) =>
+                          applyGuiModel(setGroupLabel(model, row.path, e.target.value))
+                        }
+                      />
+                      <span className="group-controls">
+                        <button
+                          onClick={() => applyGuiModel(addSignalToGroup(model, row.path))}
+                          title="このグループに信号を追加"
+                          aria-label="グループに信号を追加"
+                        >
+                          ＋信号
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedPath(null)
+                            applyGuiModel(removeGroup(model, row.path))
+                          }}
+                          title="グループを削除"
+                          aria-label="グループを削除"
+                        >
+                          ×
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 )
@@ -231,7 +263,6 @@ function RowControls({ path }: { path: number[] }) {
   const model = useEditor((s) => s.model)
   const applyGuiModel = useEditor((s) => s.applyGuiModel)
   const setSelectedPath = useEditor((s) => s.setSelectedPath)
-  const topLevel = path.length === 1
   // Indices shift on remove/move, so any held selection would now point at a
   // different signal — deselect to avoid silently editing the wrong row.
   const restructure = (next: ReturnType<typeof moveRow>) => {
@@ -241,7 +272,6 @@ function RowControls({ path }: { path: number[] }) {
   return (
     <span className="row-controls" onClick={(e) => e.stopPropagation()}>
       <button
-        disabled={!topLevel}
         onClick={() => restructure(moveRow(model, path, -1))}
         title="上へ"
         aria-label="信号を上へ移動"
@@ -249,7 +279,6 @@ function RowControls({ path }: { path: number[] }) {
         ▲
       </button>
       <button
-        disabled={!topLevel}
         onClick={() => restructure(moveRow(model, path, 1))}
         title="下へ"
         aria-label="信号を下へ移動"
