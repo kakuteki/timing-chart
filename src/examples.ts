@@ -50,7 +50,7 @@ export const EXAMPLES: Example[] = [
     model: {
       signal: [
         { name: 'SCLK', wave: '0.P.P.P.P.0' },
-        { name: 'CS', wave: '10.......1' },
+        { name: 'CS', wave: '10........1' },
         { name: 'MOSI', wave: 'x.=.=.=.=.x', data: ['b7', 'b6', 'b5', 'b4'] },
       ],
       config: { hscale: 1 },

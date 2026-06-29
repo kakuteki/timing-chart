@@ -44,7 +44,6 @@ export function BusDataPanel() {
             <input
               value={data[i] ?? ''}
               placeholder="例: 0xFF"
-              autoFocus={i === 0 && (data[i] ?? '') === ''}
               onChange={(e) => applyGuiModel(setDataLabel(model, selectedPath, i, e.target.value), true)}
             />
           </label>

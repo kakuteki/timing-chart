@@ -170,7 +170,13 @@ export function uniqueName(model: WaveJson, base: string): string {
 /** Turn an existing signal into a full-length clock (period over all columns). */
 export function makeClock(model: WaveJson, path: number[]): WaveJson {
   const ticks = currentMaxTicks(model)
-  return updateSignal(model, path, (sig) => withData({ ...sig, wave: clockWave('p', ticks) }, []))
+  const next = updateSignal(model, path, (sig) => {
+    // A clock has no data or markers — drop them so stray edges don't dangle.
+    const { node: _n, ...rest } = sig
+    void _n
+    return withData({ ...rest, wave: clockWave('p', ticks) }, [])
+  })
+  return cleanupEdges(next)
 }
 
 /** Append a new signal at the top level, with a unique name. */

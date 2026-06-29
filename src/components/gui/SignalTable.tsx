@@ -314,7 +314,7 @@ export function SignalTable() {
                       <span className="spacer-label">— 空行 —</span>
                     </td>
                     <td className="ctrl-col">
-                      <RowControls path={row.path} />
+                      <RowControls path={row.path} isSignal={false} />
                     </td>
                     <td colSpan={ticks} />
                   </tr>
@@ -407,7 +407,7 @@ export function SignalTable() {
   )
 }
 
-function RowControls({ path }: { path: number[] }) {
+function RowControls({ path, isSignal = true }: { path: number[]; isSignal?: boolean }) {
   const model = useEditor((s) => s.model)
   const applyGuiModel = useEditor((s) => s.applyGuiModel)
   const setSelectedPath = useEditor((s) => s.setSelectedPath)
@@ -434,13 +434,15 @@ function RowControls({ path }: { path: number[] }) {
       >
         ▼
       </button>
-      <button
-        onClick={() => applyGuiModel(makeClock(model, path))}
-        title="この信号をクロック（周期信号）にする"
-        aria-label="この信号をクロックにする"
-      >
-        ⎍
-      </button>
+      {isSignal && (
+        <button
+          onClick={() => applyGuiModel(makeClock(model, path))}
+          title="この信号をクロック（周期信号）にする"
+          aria-label="この信号をクロックにする"
+        >
+          ⎍
+        </button>
+      )}
       <button
         onClick={() => restructure(removeRow(model, path))}
         title="削除"
