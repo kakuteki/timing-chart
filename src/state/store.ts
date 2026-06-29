@@ -87,6 +87,8 @@ export interface EditorState {
   selectedPath: number[] | null
   /** One-shot startup notice (e.g. broken share link), shown then cleared. */
   notice: string | null
+  /** Increments on each file/document load — lets views reset transient UI. */
+  loadEpoch: number
   /** Undo stack (previous model snapshots, oldest first). */
   past: WaveJson[]
   /** Redo stack (snapshots undone, most-recently-undone last). */
@@ -131,6 +133,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   skinName: (startModel.config?.skin as SkinName) ?? 'default',
   selectedPath: null,
   notice: startNotice,
+  loadEpoch: 0,
   past: [],
   future: [],
 
@@ -198,6 +201,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       skinName: (model.config?.skin as SkinName) ?? 'default',
       // Fresh document — clear any selection pointing into the old one.
       selectedPath: null,
+      loadEpoch: state.loadEpoch + 1,
     }))
   },
 
