@@ -72,7 +72,9 @@ export function bridgeConnect(url: string, onStatus?: (s: BridgeStatus) => void)
     if (!incoming || !Array.isArray(incoming.signal)) return
     suppressPush = true
     try {
-      useEditor.getState().loadModel(incoming)
+      // applyRemote (not loadModel) so external traffic doesn't flood the undo
+      // stack and evict the user's own undo points.
+      useEditor.getState().applyRemote(incoming)
     } finally {
       suppressPush = false
     }

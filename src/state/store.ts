@@ -132,6 +132,8 @@ export interface EditorState {
   setTextFocused: (focused: boolean) => void
   /** Replace everything from a loaded file / share link. */
   loadModel: (model: WaveJson) => void
+  /** Apply a model pushed from the bridge WITHOUT recording undo history. */
+  applyRemote: (model: WaveJson) => void
   setSkin: (skin: SkinName) => void
   setSelectedPath: (path: number[] | null) => void
   clearNotice: () => void
@@ -254,6 +256,26 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedPath: null,
       loadEpoch: state.loadEpoch + 1,
       viewingShared: false,
+    }))
+  },
+
+  applyRemote: (model) => {
+    // The bridge pushes external edits continuously; folding each into the undo
+    // stack would evict the user's own undo points (50-entry cap) and make
+    // Ctrl+Z replay remote states. So apply WITHOUT histPush, and don't churn
+    // loadEpoch/viewingShared. Keep the user's text-in-progress and selection
+    // when they still resolve.
+    lastCoalesceKey = null
+    set((state) => ({
+      model,
+      lastValidModel: model,
+      textBuffer: state.textFocused ? state.textBuffer : serializeModel(model),
+      editSource: 'load',
+      parseError: state.textFocused ? state.parseError : null,
+      skinName: (model.config?.skin as SkinName) ?? state.skinName,
+      selectedPath: selectionSurvives(state.selectedPath, state.model, model)
+        ? state.selectedPath
+        : null,
     }))
   },
 
