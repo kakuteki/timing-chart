@@ -20,6 +20,10 @@ export function Toolbar() {
   const setSkin = useEditor((s) => s.setSkin)
   const notice = useEditor((s) => s.notice)
   const clearNotice = useEditor((s) => s.clearNotice)
+  const undo = useEditor((s) => s.undo)
+  const redo = useEditor((s) => s.redo)
+  const canUndo = useEditor((s) => s.past.length > 0)
+  const canRedo = useEditor((s) => s.future.length > 0)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<number | undefined>(undefined)
@@ -106,6 +110,15 @@ export function Toolbar() {
   return (
     <header className="toolbar">
       <span className="app-title">タイミングチャート</span>
+
+      <div className="tb-group">
+        <button onClick={undo} disabled={!canUndo} title="元に戻す (Ctrl+Z)" aria-label="元に戻す">
+          ↶
+        </button>
+        <button onClick={redo} disabled={!canRedo} title="やり直し (Ctrl+Y)" aria-label="やり直し">
+          ↷
+        </button>
+      </div>
 
       <div className="tb-group">
         <select value={clockKind} onChange={(e) => setClockKind(e.target.value as ClockKind)}>
