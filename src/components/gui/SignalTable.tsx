@@ -34,6 +34,7 @@ export function SignalTable() {
 
   const onCellClick = (path: number[], tick: number, e: React.MouseEvent) => {
     if (e.altKey) {
+      if (tick === 0) return // tick 0 has nothing to extend from
       applyGuiModel(extendCell(model, path, tick))
       return
     }
@@ -160,24 +161,31 @@ export function SignalTable() {
 function RowControls({ path }: { path: number[] }) {
   const model = useEditor((s) => s.model)
   const applyGuiModel = useEditor((s) => s.applyGuiModel)
+  const setSelectedPath = useEditor((s) => s.setSelectedPath)
   const topLevel = path.length === 1
+  // Indices shift on remove/move, so any held selection would now point at a
+  // different signal — deselect to avoid silently editing the wrong row.
+  const restructure = (next: ReturnType<typeof moveRow>) => {
+    setSelectedPath(null)
+    applyGuiModel(next)
+  }
   return (
     <span className="row-controls" onClick={(e) => e.stopPropagation()}>
       <button
         disabled={!topLevel}
-        onClick={() => applyGuiModel(moveRow(model, path, -1))}
+        onClick={() => restructure(moveRow(model, path, -1))}
         title="上へ"
       >
         ▲
       </button>
       <button
         disabled={!topLevel}
-        onClick={() => applyGuiModel(moveRow(model, path, 1))}
+        onClick={() => restructure(moveRow(model, path, 1))}
         title="下へ"
       >
         ▼
       </button>
-      <button onClick={() => applyGuiModel(removeRow(model, path))} title="削除">
+      <button onClick={() => restructure(removeRow(model, path))} title="削除">
         ×
       </button>
     </span>

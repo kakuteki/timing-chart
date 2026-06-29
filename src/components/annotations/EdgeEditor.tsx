@@ -40,7 +40,10 @@ export function EdgeEditor() {
     if (!row?.signal) return
     const letter = nextNodeLetter(model)
     if (!letter) return
-    const node = placeNode(row.signal.node, markerTick, letter)
+    // Clamp to the signal's wave so the marker can't land off the waveform.
+    const waveLen = row.signal.wave?.length ?? 0
+    const tick = Math.min(markerTick, Math.max(0, waveLen - 1))
+    const node = placeNode(row.signal.node, tick, letter)
     applyGuiModel(setSignalNode(model, selectedPath, node))
   }
 
