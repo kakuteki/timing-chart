@@ -4,26 +4,29 @@
 //   npm run build && npm run bridge      # serves the app + API on one origin
 //   # then open  http://localhost:51123/timing-chart/  and toggle ブリッジ on
 //
-// API (CORS enabled, so the dev server / GitHub Pages site can connect too):
-//   GET  /health        -> { ok, clients }
-//   GET  /model         -> current WaveJSON model
-//   POST /model         -> set model (body = WaveJSON); broadcast to clients
-//   GET  /events        -> SSE stream pushing the model on every change
+// API:
+//   GET  /health        -> { ok, clients, rev }
+//   GET  /model         -> current WaveJSON model (raw, for curl/jq)
+//   POST /model         -> set model (body = WaveJSON; header X-Client-Id opt.)
+//   GET  /events        -> SSE stream of { model, rev, source } on every change
 //
-// Loose-coupling by design: bad input returns 4xx but never crashes the server,
-// and a missing dist/ just means the static routes 404 (the API still works).
+// Security/robustness: binds to 127.0.0.1 only (not the LAN), CORS is limited to
+// localhost + the GitHub Pages origin, bad/oversized input returns 4xx without
+// crashing, and static paths are confined to dist/.
 
 import http from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { join, extname, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const PORT = Number(process.env.BRIDGE_PORT ?? 51123)
 const ROOT = fileURLToPath(new URL('../dist', import.meta.url))
+const MAX_BODY = 5_000_000
+const ALLOW_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
 
-/** The single shared model. Starts with a tiny placeholder. */
+/** The single shared model + a monotonic revision and the last editor's id. */
 let model = { signal: [{ name: 'clk', wave: 'P....' }], config: { hscale: 1 } }
-/** Connected SSE responses. */
+let rev = 0
+let lastSource = ''
 const clients = new Set()
 
 const MIME = {
@@ -38,10 +41,16 @@ const MIME = {
   '.woff2': 'font/woff2',
 }
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+function cors(req, res) {
+  const origin = req.headers.origin
+  if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*') // non-browser caller (curl)
+  } else if (ALLOW_ORIGIN.test(origin) || origin === 'https://kakuteki.github.io') {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Client-Id')
 }
 
 function json(res, code, obj) {
@@ -49,8 +58,7 @@ function json(res, code, obj) {
   res.end(JSON.stringify(obj))
 }
 
-/** Validate the minimum shape, mirroring the app's parser, so a bad POST can't
- * crash the open browser tab. */
+/** Minimal shape check (mirrors the app parser) so a bad POST can't crash the tab. */
 function isValidModel(m) {
   if (!m || typeof m !== 'object' || Array.isArray(m)) return false
   if (!Array.isArray(m.signal)) return false
@@ -61,11 +69,15 @@ function isValidModel(m) {
   return m.signal.every(validLane)
 }
 
+function frame() {
+  return `data: ${JSON.stringify({ model, rev, source: lastSource })}\n\n`
+}
+
 function broadcast() {
-  const frame = `data: ${JSON.stringify(model)}\n\n`
+  const f = frame()
   for (const res of clients) {
     try {
-      res.write(frame)
+      res.write(f)
     } catch {
       clients.delete(res)
     }
@@ -88,7 +100,6 @@ async function serveStatic(pathname, res) {
     res.writeHead(200, { 'Content-Type': MIME[extname(file)] ?? 'application/octet-stream' })
     res.end(await readFile(file))
   } catch {
-    // SPA fallback (or a helpful message when not built yet).
     try {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       res.end(await readFile(join(ROOT, 'index.html')))
@@ -99,9 +110,9 @@ async function serveStatic(pathname, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  const { pathname } = new URL(req.url, `http://localhost:${PORT}`)
-  cors(res)
+function handler(req, res) {
+  const { pathname } = new URL(req.url, 'http://localhost')
+  cors(req, res)
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
@@ -110,7 +121,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (pathname === '/health') {
-    json(res, 200, { ok: true, clients: clients.size })
+    json(res, 200, { ok: true, clients: clients.size, rev })
     return
   }
 
@@ -121,11 +132,18 @@ const server = http.createServer((req, res) => {
 
   if (pathname === '/model' && req.method === 'POST') {
     let body = ''
+    let aborted = false
     req.on('data', (c) => {
+      if (aborted) return
       body += c
-      if (body.length > 5_000_000) req.destroy() // 5MB guard
+      if (body.length > MAX_BODY) {
+        aborted = true
+        json(res, 413, { ok: false, error: 'モデルが大きすぎます (上限 5MB)' })
+        req.destroy()
+      }
     })
     req.on('end', () => {
+      if (aborted) return
       let parsed
       try {
         parsed = JSON.parse(body)
@@ -138,8 +156,10 @@ const server = http.createServer((req, res) => {
         return
       }
       model = parsed
+      rev += 1
+      lastSource = String(req.headers['x-client-id'] ?? '')
       broadcast()
-      json(res, 200, { ok: true })
+      json(res, 200, { ok: true, rev })
     })
     return
   }
@@ -150,7 +170,7 @@ const server = http.createServer((req, res) => {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     })
-    res.write(`data: ${JSON.stringify(model)}\n\n`) // send current state immediately
+    res.write(frame()) // current state immediately
     clients.add(res)
     const ping = setInterval(() => {
       try {
@@ -167,10 +187,25 @@ const server = http.createServer((req, res) => {
   }
 
   serveStatic(pathname, res)
-})
+}
 
-server.listen(PORT, () => {
-  console.log(`timing-chart bridge → http://localhost:${PORT}`)
-  console.log(`  app:    http://localhost:${PORT}/timing-chart/   (after npm run build)`)
-  console.log(`  GET/POST /model · GET /events · GET /health`)
-})
+/** Create (and optionally start) the bridge server. Exported for tests. */
+export function createBridge() {
+  return http.createServer(handler)
+}
+
+export function start(port = Number(process.env.BRIDGE_PORT ?? 51123)) {
+  const server = createBridge()
+  // 127.0.0.1 only — never expose the chart to the LAN.
+  server.listen(port, '127.0.0.1', () => {
+    console.log(`timing-chart bridge → http://localhost:${port}  (127.0.0.1 のみ)`)
+    console.log(`  app:    http://localhost:${port}/timing-chart/   (after npm run build)`)
+    console.log(`  GET/POST /model · GET /events · GET /health`)
+  })
+  return server
+}
+
+// Auto-start only when run directly (not when imported by tests).
+if (process.argv[1] && fileURLToPath(import.meta.url) === normalize(process.argv[1])) {
+  start()
+}
