@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../state/store'
-import { maxTicks } from '../state/selectors'
+import { maxTicks, flattenSignals } from '../state/selectors'
 import { uniqueName } from '../state/actions'
 import { clockWave, type ClockKind } from '../model/clockgen'
 import { serializeModel } from '../model/serialize'
@@ -60,11 +60,24 @@ export function Toolbar() {
     applyGuiModel({ ...model, signal: [...model.signal, { name, wave }] })
   }
 
+  // Name exports after the first signal + a timestamp so writing several charts
+  // doesn't collide on one fixed name (browser "(1)" suffixes / overwrites).
+  const fileName = (ext: string) => {
+    const first = flattenSignals(model).find((r) => r.kind === 'signal')?.signal?.name?.trim()
+    const base = (first && first.length ? first : 'timing-chart')
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .slice(0, 40)
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    const ts = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
+    return `${base}-${ts}.${ext}`
+  }
+
   const exportSvg = () => {
     const svg = getLatestSvg()
     if (!svg) return flash('描画SVGが見つかりません')
     // Pass the skin background so a dark-skin SVG isn't transparent-on-white.
-    downloadText(svgToString(svg, SKIN_BG[skinName]), 'timing-chart.svg', 'image/svg+xml')
+    downloadText(svgToString(svg, SKIN_BG[skinName]), fileName('svg'), 'image/svg+xml')
   }
 
   const exportPng = async () => {
@@ -72,7 +85,7 @@ export function Toolbar() {
     if (!svg) return flash('描画SVGが見つかりません')
     try {
       const { blob, effectiveScale } = await svgToPngBlob(svg, pngScale, SKIN_BG[skinName])
-      downloadBlob(blob, 'timing-chart.png')
+      downloadBlob(blob, fileName('png'))
       // The chart was too big for the requested scale — say so instead of
       // handing back a silently lower-resolution image.
       if (effectiveScale < pngScale - 0.01) {
@@ -83,8 +96,25 @@ export function Toolbar() {
     }
   }
 
+  const copyImage = async () => {
+    const svg = getLatestSvg()
+    if (!svg) return flash('描画SVGが見つかりません')
+    // Image clipboard needs the async Clipboard API + ClipboardItem (absent on
+    // some browsers / non-secure contexts) — degrade to a hint, never throw.
+    if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+      return flash('この環境では画像コピーに未対応です（PNG保存をご利用ください）')
+    }
+    try {
+      const { blob } = await svgToPngBlob(svg, pngScale, SKIN_BG[skinName])
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+      flash('画像をクリップボードにコピーしました')
+    } catch {
+      flash('画像コピーに失敗しました（PNG保存をご利用ください）')
+    }
+  }
+
   const exportJson = () => {
-    downloadText(serializeModel(model), 'timing-chart.wavejson', 'application/json')
+    downloadText(serializeModel(model), fileName('wavejson'), 'application/json')
   }
 
   const onLoadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,6 +199,9 @@ export function Toolbar() {
           <option value={2}>2×</option>
           <option value={4}>4×</option>
         </select>
+        <button onClick={copyImage} title="図をPNG画像としてクリップボードにコピー（スライド等に貼り付け）">
+          画像コピー
+        </button>
         <button onClick={share}>共有リンク</button>
       </div>
 
