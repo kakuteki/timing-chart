@@ -3,6 +3,20 @@
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const XLINK_NS = 'http://www.w3.org/1999/xlink'
 
+// WaveDrom skins hard-code `font-family:Helvetica` with no fallback. Helvetica
+// is absent on Windows/Linux, so an exported SVG opened in Inkscape/Illustrator/
+// LibreOffice (or another browser) substitutes a different font, shifting
+// metrics and clipping bus labels. Append a portable fallback stack. Pure
+// string op so it's unit-testable without a DOM.
+export function addFontFallback(svgString: string): string {
+  // The negative lookahead `(?![\w,-])` skips a Helvetica that already has a
+  // fallback (`Helvetica,Arial,…`) so we don't append a second time.
+  return svgString.replace(
+    /font-family\s*:\s*Helvetica(?![\w,-])/gi,
+    'font-family:Helvetica,Arial,"Liberation Sans",sans-serif',
+  )
+}
+
 /**
  * Produce a self-contained SVG string from a live <svg> element. Pass `bg` to
  * paint a background rect — essential for the dark skin, whose text is white and
@@ -22,7 +36,7 @@ export function svgToString(svg: SVGSVGElement, bg?: string): string {
     rect.setAttribute('fill', bg)
     clone.insertBefore(rect, clone.firstChild)
   }
-  const body = new XMLSerializer().serializeToString(clone)
+  const body = addFontFallback(new XMLSerializer().serializeToString(clone))
   return `<?xml version="1.0" encoding="UTF-8"?>\n${body}`
 }
 

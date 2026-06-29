@@ -1073,12 +1073,24 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+.crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
 .crash-panel button {
   cursor: pointer;
   border: 1px solid var(--border);
   background: #fff;
   border-radius: 6px;
   padding: 6px 12px;
+}
+.crash-panel button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
 }
 
 /* ---- Responsive: single column + 3-way tabs on phones/tablets ---- */

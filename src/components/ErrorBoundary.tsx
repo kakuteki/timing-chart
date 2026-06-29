@@ -10,8 +10,9 @@ interface State {
 /**
  * Catches render crashes so a malformed model (e.g. one autosaved before a
  * validation fix, or arriving via a crafted share link) shows a recovery panel
- * instead of a white screen the user can't escape. Reset clears the autosave
- * and the share hash, then reloads to the default document.
+ * instead of a white screen the user can't escape. Recovery offers a
+ * non-destructive path first (drop the share hash, keep the user's own draft)
+ * and only wipes the autosave as a last resort.
  */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
@@ -25,15 +26,10 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('描画クラッシュ:', error, info.componentStack)
   }
 
-  private reset = () => {
-    try {
-      localStorage.removeItem('timing-chart:model')
-    } catch {
-      /* ignore */
-    }
-    // Clear the share hash FIRST: replacing to origin+pathname while a hash is
-    // present is a same-document navigation that would not reload. Strip it via
-    // history, then force a real reload to remount from the default document.
+  // Strip the share hash, then force a real reload. (Replacing to
+  // origin+pathname while a hash is present is a same-document navigation that
+  // would not reload, so do it via history first, then reload().)
+  private reloadWithoutHash() {
     window.history.replaceState(
       null,
       '',
@@ -42,17 +38,40 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload()
   }
 
+  // Default recovery: most crashes come from a bad/crafted share link, so drop
+  // the hash and reload from the user's OWN autosaved draft — don't destroy it.
+  private softReset = () => {
+    this.reloadWithoutHash()
+  }
+
+  // Last resort: the autosaved draft itself is the problem — discard it too.
+  private hardReset = () => {
+    try {
+      localStorage.removeItem('timing-chart:model')
+    } catch {
+      /* ignore */
+    }
+    this.reloadWithoutHash()
+  }
+
   render() {
     if (this.state.error) {
       return (
         <div className="crash-panel">
           <h1>表示中に問題が発生しました</h1>
           <p>
-            データが壊れている可能性があります。リセットすると保存内容を破棄して
-            デフォルトのチャートで再起動します。
+            データが壊れている可能性があります。まずは
+            <b>共有リンクを外して再読み込み</b>
+            をお試しください（このブラウザに保存した作図は残ります）。直らない場合のみ、
+            保存内容も削除して初期化してください。
           </p>
           <pre className="crash-detail">{this.state.error.message}</pre>
-          <button onClick={this.reset}>リセットして再読み込み</button>
+          <div className="crash-actions">
+            <button className="primary" onClick={this.softReset}>
+              共有リンクを外して再読み込み（保存は残す）
+            </button>
+            <button onClick={this.hardReset}>保存内容も削除して初期化</button>
+          </div>
         </div>
       )
     }
