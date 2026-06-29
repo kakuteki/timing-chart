@@ -5,6 +5,8 @@ interface Props {
   isHead: boolean
   busLabel: string
   onClick: (e: React.MouseEvent) => void
+  onMouseDown?: (e: React.MouseEvent) => void
+  onMouseEnter?: () => void
   /** Roving-tabindex value (0 for the focused cell, -1 otherwise). */
   tabIndex?: number
   /** Identifies the cell for arrow-key focus moves, e.g. "2-5". */
@@ -20,6 +22,8 @@ export function WaveCell({
   isHead,
   busLabel,
   onClick,
+  onMouseDown,
+  onMouseEnter,
   tabIndex,
   cellId,
   onKeyDown,
@@ -32,6 +36,8 @@ export function WaveCell({
     <button
       className={cls.join(' ')}
       onClick={onClick}
+      onMouseDown={onMouseDown}
+      onMouseEnter={onMouseEnter}
       onKeyDown={onKeyDown}
       tabIndex={tabIndex}
       data-cell={cellId}
