@@ -182,12 +182,15 @@ export function SignalTable() {
     return brush
   }
 
-  // Drag-to-paint (mouse + touch via Pointer Events). Hold and sweep across a
-  // row to set a run of cells to one state; the whole sweep is one undo step.
+  // Drag-to-paint (mouse via Pointer Events). Hold and sweep across a row to set
+  // a run of cells to one state; the whole sweep is one undo step. On TOUCH we
+  // deliberately don't sweep-paint — it fought page scrolling, leaving columns
+  // unreachable on phones; touch taps edit one cell (handled in onClick).
   const dragValue = useRef<string | null>(null)
   const dragRow = useRef<number>(-1)
   const dragKey = useRef<string>('')
   const dragSeq = useRef<number>(0)
+  const lastPointerType = useRef<string>('')
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
       const v = dragValue.current
@@ -226,6 +229,13 @@ export function SignalTable() {
 
   const onCellPointerDown = (path: number[], tick: number, sigIndex: number, e: React.PointerEvent) => {
     if (e.button > 0) return // ignore right/middle mouse buttons
+    lastPointerType.current = e.pointerType
+    if (e.pointerType === 'touch') {
+      // Let the browser pan/scroll the grid (touch-action: auto); a genuine tap
+      // — not a scroll — fires onClick, which performs the single-cell edit.
+      // Don't preventDefault or arm sweep-paint here.
+      return
+    }
     e.preventDefault() // avoid text selection / page scroll while sweeping
     setSelectedPath(path)
     setFocusedCell({ r: sigIndex, t: tick })
@@ -488,9 +498,11 @@ export function SignalTable() {
                             onCellPointerDown(row.path, t, sigIndex, e)
                           }}
                           onClick={(e) => {
-                            // Mouse already handled via mousedown/drag; only act on
-                            // keyboard activation (Enter/Space → click with detail 0).
-                            if (e.detail !== 0) return
+                            // Act on keyboard activation (Enter/Space → click with
+                            // detail 0) OR a touch tap (pointerdown was touch and
+                            // intentionally did nothing). A mouse click was already
+                            // handled on pointerdown, so ignore it here.
+                            if (e.detail !== 0 && lastPointerType.current !== 'touch') return
                             setSelectedPath(row.path)
                             setFocusedCell({ r: sigIndex, t })
                             applyCellAction(row.path, t, { altKey: e.altKey, shiftKey: e.shiftKey })
