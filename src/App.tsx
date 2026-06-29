@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useEditor } from './state/store'
+import { flattenSignals } from './state/selectors'
+import { busHeadTicks } from './model/wave-codec'
 import { Toolbar } from './components/Toolbar'
 import { SignalTable } from './components/gui/SignalTable'
 import { BusDataPanel } from './components/gui/BusDataPanel'
@@ -8,9 +10,48 @@ import { WaveJsonEditor } from './components/text/WaveJsonEditor'
 import { PreviewPane } from './components/preview/PreviewPane'
 
 type Tab = 'gui' | 'text' | 'preview'
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'gui', label: '編集' },
+  { id: 'text', label: 'WaveJSON' },
+  { id: 'preview', label: 'プレビュー' },
+]
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('gui')
+  const selectedPath = useEditor((s) => s.selectedPath)
+  const model = useEditor((s) => s.model)
+
+  // Selected signal's bus segments / name + edge count → drive panel discovery.
+  const selSig = selectedPath
+    ? flattenSignals(model).find(
+        (r) =>
+          r.kind === 'signal' &&
+          r.path.length === selectedPath.length &&
+          r.path.every((v, i) => v === selectedPath[i]),
+      )?.signal
+    : undefined
+  const busCount = selSig?.wave ? busHeadTicks(selSig.wave).length : 0
+  const edgeCount = model.edge?.length ?? 0
+
+  const [busOpen, setBusOpen] = useState(false)
+  // Auto-reveal the bus panel when a signal that HAS bus values is selected.
+  useEffect(() => {
+    if (busCount > 0) setBusOpen(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPath])
+
+  // Keep the tab state consistent across the responsive breakpoint: the preview
+  // tab only exists on mobile, so normalize it away on desktop to avoid a
+  // "no tab selected" dead state after a resize.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 861px)')
+    const fix = () => {
+      if (mq.matches) setTab((t) => (t === 'preview' ? 'gui' : t))
+    }
+    fix()
+    mq.addEventListener('change', fix)
+    return () => mq.removeEventListener('change', fix)
+  }, [])
 
   // Global undo/redo shortcuts. Skip when a text field is focused so the
   // browser's native field-level undo keeps working inside the editors.
@@ -36,43 +77,69 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const onTabKey = (e: React.KeyboardEvent) => {
+    const order = TABS.map((t) => t.id)
+    const i = order.indexOf(tab)
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      setTab(order[(i + 1) % order.length])
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      setTab(order[(i - 1 + order.length) % order.length])
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setTab(order[0])
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setTab(order[order.length - 1])
+    }
+  }
+
   return (
     <div className="app">
       <Toolbar />
 
       <nav className="tabbar" role="tablist" aria-label="表示切替">
-        <button role="tab" aria-selected={tab === 'gui'} onClick={() => setTab('gui')}>
-          編集
-        </button>
-        <button role="tab" aria-selected={tab === 'text'} onClick={() => setTab('text')}>
-          WaveJSON
-        </button>
-        <button
-          role="tab"
-          className="preview-tab"
-          aria-selected={tab === 'preview'}
-          onClick={() => setTab('preview')}
-        >
-          プレビュー
-        </button>
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            role="tab"
+            id={`tab-${id}`}
+            aria-controls={`pane-${id}`}
+            aria-selected={tab === id}
+            tabIndex={tab === id ? 0 : -1}
+            className={id === 'preview' ? 'preview-tab' : undefined}
+            onKeyDown={onTabKey}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
 
       <main className="workspace" data-tab={tab}>
-        <div className="pane pane-editor">
+        <div className="pane pane-editor" role="tabpanel" id="pane-gui" aria-labelledby="tab-gui">
           <SignalTable />
-          <details className="panel">
-            <summary>バス値</summary>
+          <details className="panel" open={busOpen} onToggle={(e) => setBusOpen(e.currentTarget.open)}>
+            <summary>
+              バス値{busCount > 0 && selSig ? `: ${selSig.name || '(無名)'} #${busCount}` : ''}
+            </summary>
             <BusDataPanel />
           </details>
           <details className="panel">
-            <summary>注釈（セットアップ / ホールド）</summary>
+            <summary>注釈（セットアップ / ホールド）{edgeCount > 0 ? ` (${edgeCount})` : ''}</summary>
             <EdgeEditor />
           </details>
         </div>
-        <div className="pane pane-text">
+        <div className="pane pane-text" role="tabpanel" id="pane-text" aria-labelledby="tab-text">
           <WaveJsonEditor />
         </div>
-        <div className="pane pane-preview">
+        <div
+          className="pane pane-preview"
+          role="tabpanel"
+          id="pane-preview"
+          aria-labelledby="tab-preview"
+        >
           <PreviewPane />
         </div>
       </main>
