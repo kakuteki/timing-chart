@@ -34,11 +34,13 @@ export default function App() {
   const edgeCount = model.edge?.length ?? 0
 
   const [busOpen, setBusOpen] = useState(false)
-  // Auto-reveal the bus panel when a signal that HAS bus values is selected.
+  // Auto-reveal the bus panel whenever the selected signal HAS bus values —
+  // including when bus values are painted onto the already-selected row
+  // (so depend on busCount, not just selectedPath).
   useEffect(() => {
     if (busCount > 0) setBusOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPath])
+  }, [selectedPath, busCount])
 
   // Keep the tab state consistent across the responsive breakpoint: the preview
   // tab only exists on mobile, so normalize it away on desktop to avoid a
