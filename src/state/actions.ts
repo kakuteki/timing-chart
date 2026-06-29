@@ -183,15 +183,65 @@ export function removeRow(model: WaveJson, path: number[]): WaveJson {
   return cleanupEdges(next)
 }
 
-/** Move a top-level row up/down by one. Only reorders within the root array. */
+/** Read the lane array at `path` (the root array when path is empty). */
+function lanesAt(model: WaveJson, path: number[]): WaveLane[] {
+  let cur: WaveLane[] = model.signal
+  for (const idx of path) cur = cur[idx] as WaveLane[]
+  return cur
+}
+
+/**
+ * Move a row up/down by one WITHIN its parent array (top level or inside a
+ * group). Index 0 of a group array is its label string, so signals inside a
+ * group can't be swapped above it.
+ */
 export function moveRow(model: WaveJson, path: number[], dir: -1 | 1): WaveJson {
-  if (path.length !== 1) return model // nested reorder unsupported in v1
-  const i = path[0]
+  if (path.length === 0) return model
+  const parentPath = path.slice(0, -1)
+  const i = path[path.length - 1]
+  const parent = lanesAt(model, parentPath)
+  if (!Array.isArray(parent)) return model
+  const minIdx = typeof parent[0] === 'string' ? 1 : 0 // keep a group label first
   const j = i + dir
-  if (j < 0 || j >= model.signal.length) return model
-  const next = model.signal.slice()
-  ;[next[i], next[j]] = [next[j], next[i]]
-  return { ...model, signal: next }
+  if (j < minIdx || j >= parent.length) return model
+  const swap = (arr: WaveLane[]): WaveLane[] => {
+    const c = arr.slice()
+    ;[c[i], c[j]] = [c[j], c[i]]
+    return c
+  }
+  if (parentPath.length === 0) return { ...model, signal: swap(model.signal) }
+  return { ...model, signal: updateLane(model.signal, parentPath, (g) => swap(g as WaveLane[])) }
+}
+
+/** Append a new group `["ラベル", {新規信号}]` at the top level. */
+export function addGroup(model: WaveJson): WaveJson {
+  const ticks = currentMaxTicks(model)
+  const wave = '0'.padEnd(ticks, '.')
+  const group: WaveLane = ['グループ', { name: uniqueName(model, 'sig'), wave }]
+  return { ...model, signal: [...model.signal, group] }
+}
+
+/** Rename a group label (its row path points at the label string). */
+export function setGroupLabel(model: WaveJson, labelPath: number[], label: string): WaveJson {
+  return { ...model, signal: updateLane(model.signal, labelPath, () => label) }
+}
+
+/** Remove the whole group that owns the label at `labelPath`. */
+export function removeGroup(model: WaveJson, labelPath: number[]): WaveJson {
+  const groupPath = labelPath.slice(0, -1) // label → its containing group array
+  return cleanupEdges({ ...model, signal: removeLane(model.signal, groupPath) })
+}
+
+/** Append a new signal inside the group that owns the label at `labelPath`. */
+export function addSignalToGroup(model: WaveJson, labelPath: number[]): WaveJson {
+  const groupPath = labelPath.slice(0, -1)
+  const ticks = currentMaxTicks(model)
+  const wave = '0'.padEnd(ticks, '.')
+  const sig: WaveLane = { name: uniqueName(model, 'sig'), wave }
+  return {
+    ...model,
+    signal: updateLane(model.signal, groupPath, (g) => [...(g as WaveLane[]), sig]),
+  }
 }
 
 /** Longest wave length among all signals (local helper to avoid import cycle). */

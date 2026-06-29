@@ -244,6 +244,41 @@ body {
   font-weight: 600;
   padding: 3px 6px;
 }
+.group-caret {
+  color: var(--muted);
+  margin-right: 4px;
+}
+.group-input {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font: inherit;
+  font-weight: 600;
+  width: 140px;
+}
+.group-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  background: #fff;
+}
+.group-controls {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+  font-weight: 400;
+}
+.group-controls button {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 12px;
+}
+.group-controls button:hover {
+  border-color: var(--accent);
+}
 .spacer-row td {
   height: 14px;
 }
