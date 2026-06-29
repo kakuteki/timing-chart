@@ -219,6 +219,24 @@ body {
   background: var(--accent-weak);
 }
 
+.app-toast-region {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  pointer-events: none;
+}
+.app-toast {
+  display: inline-block;
+  background: #111827;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
 /* ---- Help / welcome modal ---- */
 .modal-backdrop {
   position: fixed;

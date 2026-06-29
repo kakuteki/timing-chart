@@ -98,6 +98,8 @@ export interface EditorState {
   selectedPath: number[] | null
   /** One-shot startup notice (e.g. broken share link), shown then cleared. */
   notice: string | null
+  /** Transient toast message (auto-clears), for feedback like "deleted". */
+  toast: string | null
   /** Increments on each file/document load — lets views reset transient UI. */
   loadEpoch: number
   /** True while showing a shared-link snapshot that hasn't been edited yet. */
@@ -125,6 +127,8 @@ export interface EditorState {
   setSkin: (skin: SkinName) => void
   setSelectedPath: (path: number[] | null) => void
   clearNotice: () => void
+  /** Show a transient toast message (auto-clears after a few seconds). */
+  flash: (message: string) => void
   /** Restore the previous model snapshot. */
   undo: () => void
   /** Re-apply a snapshot that was undone. */
@@ -157,6 +161,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   skinName: (startModel.config?.skin as SkinName) ?? 'default',
   selectedPath: null,
   notice: startNotice,
+  toast: null,
   loadEpoch: 0,
   viewingShared: share.present && !!share.model,
   past: [],
@@ -258,6 +263,15 @@ export const useEditor = create<EditorState>((set, get) => ({
   setSelectedPath: (path) => set({ selectedPath: path }),
 
   clearNotice: () => set({ notice: null }),
+
+  flash: (message) => {
+    set({ toast: message })
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        if (useEditor.getState().toast === message) set({ toast: null })
+      }, 3000)
+    }
+  },
 
   undo: () => {
     lastCoalesceKey = null
