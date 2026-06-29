@@ -8,6 +8,7 @@ import { readShare } from '../share/url'
 import { flattenSignals } from './selectors'
 
 const STORAGE_KEY = 'timing-chart:model'
+const HISTORY_CAP = 50
 
 /** The signal at `path`, or undefined. */
 function signalAt(path: number[] | null, model: WaveJson) {
@@ -86,6 +87,10 @@ export interface EditorState {
   selectedPath: number[] | null
   /** One-shot startup notice (e.g. broken share link), shown then cleared. */
   notice: string | null
+  /** Undo stack (previous model snapshots, oldest first). */
+  past: WaveJson[]
+  /** Redo stack (snapshots undone, most-recently-undone last). */
+  future: WaveJson[]
 
   /** Apply a model produced by the GUI; regenerates the text buffer. */
   applyGuiModel: (model: WaveJson) => void
@@ -99,6 +104,15 @@ export interface EditorState {
   setSkin: (skin: SkinName) => void
   setSelectedPath: (path: number[] | null) => void
   clearNotice: () => void
+  /** Restore the previous model snapshot. */
+  undo: () => void
+  /** Re-apply a snapshot that was undone. */
+  redo: () => void
+}
+
+/** History fields recording `state.model` as the latest undo point. */
+function histPush(state: EditorState): Pick<EditorState, 'past' | 'future'> {
+  return { past: [...state.past, state.model].slice(-HISTORY_CAP), future: [] }
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -111,10 +125,13 @@ export const useEditor = create<EditorState>((set, get) => ({
   skinName: (startModel.config?.skin as SkinName) ?? 'default',
   selectedPath: null,
   notice: startNotice,
+  past: [],
+  future: [],
 
   applyGuiModel: (model) => {
     detachShareHash() // first edit after opening a share link → own working copy
     set((state) => ({
+      ...histPush(state),
       model,
       lastValidModel: model,
       // Don't clobber the text buffer the user is actively typing in.
@@ -133,6 +150,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       detachShareHash()
       // Promote to model but DO NOT rewrite textBuffer — the user owns it.
       set((state) => ({
+        ...histPush(state),
         model: res.model!,
         lastValidModel: res.model!,
         editSource: 'text',
@@ -152,16 +170,17 @@ export const useEditor = create<EditorState>((set, get) => ({
   setTextFocused: (focused) => set({ textFocused: focused }),
 
   loadModel: (model) =>
-    set({
+    set((state) => ({
+      ...histPush(state),
       model,
       lastValidModel: model,
       textBuffer: serializeModel(model),
       editSource: 'load',
       parseError: null,
-      skinName: (model.config?.skin as SkinName) ?? get().skinName,
+      skinName: (model.config?.skin as SkinName) ?? state.skinName,
       // Fresh document — clear any selection pointing into the old one.
       selectedPath: null,
-    }),
+    })),
 
   // Skin is part of the model so it survives share/save/reload (the renderer
   // injects config.skin from skinName; keep both in sync here).
@@ -170,6 +189,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((state) => {
       const model = { ...state.model, config: { ...state.model.config, skin } }
       return {
+        ...histPush(state),
         skinName: skin,
         model,
         lastValidModel: model,
@@ -182,6 +202,41 @@ export const useEditor = create<EditorState>((set, get) => ({
   setSelectedPath: (path) => set({ selectedPath: path }),
 
   clearNotice: () => set({ notice: null }),
+
+  undo: () =>
+    set((state) => {
+      if (state.past.length === 0) return {}
+      const prev = state.past[state.past.length - 1]
+      return {
+        model: prev,
+        lastValidModel: prev,
+        textBuffer: state.textFocused ? state.textBuffer : serializeModel(prev),
+        editSource: 'load',
+        parseError: null,
+        // Restore the snapshot's exact skin (default when it had none).
+        skinName: (prev.config?.skin as SkinName) ?? 'default',
+        past: state.past.slice(0, -1),
+        future: [...state.future, state.model],
+        selectedPath: selectionSurvives(state.selectedPath, state.model, prev) ? state.selectedPath : null,
+      }
+    }),
+
+  redo: () =>
+    set((state) => {
+      if (state.future.length === 0) return {}
+      const next = state.future[state.future.length - 1]
+      return {
+        model: next,
+        lastValidModel: next,
+        textBuffer: state.textFocused ? state.textBuffer : serializeModel(next),
+        editSource: 'load',
+        parseError: null,
+        skinName: (next.config?.skin as SkinName) ?? 'default',
+        past: [...state.past, state.model],
+        future: state.future.slice(0, -1),
+        selectedPath: selectionSurvives(state.selectedPath, state.model, next) ? state.selectedPath : null,
+      }
+    }),
 }))
 
 // Autosave the canonical model so a reload/accidental close doesn't lose work.

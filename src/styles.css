@@ -70,8 +70,12 @@ body {
   border-radius: 6px;
   padding: 4px 8px;
 }
-.toolbar button:hover {
+.toolbar button:hover:not(:disabled) {
   background: var(--accent-weak);
+}
+.toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .toolbar select,
 .edge-editor select,
