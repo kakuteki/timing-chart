@@ -160,29 +160,31 @@ export function SignalTable() {
         </button>
       </div>
 
-      <div className="brush-palette" role="group" aria-label="ペン（状態ブラシ）">
-        <span className="brush-label">ペン</span>
-        <button
-          className={brush === null ? 'palette-btn active' : 'palette-btn'}
-          onClick={() => setBrush(null)}
-          title="クリックで状態を順送り（既定）"
-          aria-pressed={brush === null}
-        >
-          サイクル
-        </button>
-        {PALETTE.map(({ v, t }) => (
+      <details className="brush-details">
+        <summary>ペン（状態ブラシ）{brush !== null ? `: ${brush}` : ''}</summary>
+        <div className="brush-palette" role="group" aria-label="ペン（状態ブラシ）">
           <button
-            key={v}
-            className={brush === v ? `${brushClasses(v)} active` : brushClasses(v)}
-            onClick={() => setBrush(brush === v ? null : v)}
-            title={t}
-            aria-label={t}
-            aria-pressed={brush === v}
+            className={brush === null ? 'palette-btn active' : 'palette-btn'}
+            onClick={() => setBrush(null)}
+            title="クリックで状態を順送り（既定）"
+            aria-pressed={brush === null}
           >
-            {v}
+            サイクル
           </button>
-        ))}
-      </div>
+          {PALETTE.map(({ v, t }) => (
+            <button
+              key={v}
+              className={brush === v ? `${brushClasses(v)} active` : brushClasses(v)}
+              onClick={() => setBrush(brush === v ? null : v)}
+              title={t}
+              aria-label={t}
+              aria-pressed={brush === v}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </details>
 
       <div className="table-scroll">
         <table className="grid">

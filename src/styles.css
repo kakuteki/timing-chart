@@ -48,6 +48,7 @@ body {
   font-weight: 700;
   font-size: 15px;
   margin-right: 4px;
+  white-space: nowrap;
 }
 .tb-group {
   display: flex;
@@ -136,16 +137,44 @@ body {
   font-size: 13px;
 }
 
-/* ---- Layout ---- */
-.layout {
+/* ---- Tab bar ---- */
+.tabbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.tabbar button {
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  padding: 7px 16px;
+  border-radius: 8px 8px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.tabbar button[aria-selected='true'] {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--border);
+  font-weight: 600;
+}
+.tabbar .preview-tab {
+  display: none; /* desktop: preview is always shown; only a tab on mobile */
+}
+
+/* ---- Workspace (desktop: editor + sticky preview) ---- */
+.workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(420px, 1.2fr) minmax(280px, 0.9fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(440px, 1.15fr) minmax(340px, 1fr);
   gap: 1px;
   background: var(--border);
   overflow: hidden;
 }
-.col {
+.pane {
   background: var(--bg);
   overflow: auto;
   padding: 10px;
@@ -153,6 +182,52 @@ body {
   flex-direction: column;
   gap: 10px;
 }
+.pane-editor,
+.pane-text {
+  grid-area: 1 / 1;
+}
+.pane-preview {
+  grid-area: 1 / 2;
+}
+/* In the editor column, show GUI or the WaveJSON text per the active tab. */
+.workspace[data-tab='text'] .pane-editor {
+  display: none;
+}
+.workspace:not([data-tab='text']) .pane-text {
+  display: none;
+}
+
+/* Collapsible secondary panels (bus values, annotations). */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.panel > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  list-style: none;
+}
+.panel > summary::before {
+  content: '▸ ';
+  color: var(--muted);
+}
+.panel[open] > summary::before {
+  content: '▾ ';
+}
+.panel > summary::-webkit-details-marker {
+  display: none;
+}
+.panel .bus-panel,
+.panel .edge-editor {
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+
 .pane-title {
   font-weight: 700;
   font-size: 13px;
@@ -189,17 +264,31 @@ body {
   min-width: 48px;
   text-align: center;
 }
+.brush-details {
+  margin: 0 0 8px;
+}
+.brush-details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 0;
+  list-style: none;
+}
+.brush-details > summary::before {
+  content: '▸ ';
+}
+.brush-details[open] > summary::before {
+  content: '▾ ';
+}
+.brush-details > summary::-webkit-details-marker {
+  display: none;
+}
 .brush-palette {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 3px;
-  margin: 0 0 8px;
-}
-.brush-label {
-  color: var(--muted);
-  font-size: 12px;
-  margin-right: 4px;
+  margin: 6px 0 0;
 }
 .palette-btn {
   cursor: pointer;
@@ -604,18 +693,55 @@ body {
   padding: 6px 12px;
 }
 
-/* ---- Responsive: collapse the 3-column layout on narrow viewports ---- */
-@media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: 1fr 1fr;
+/* ---- Responsive: single column + 3-way tabs on phones/tablets ---- */
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
     overflow: auto;
   }
-  .col-preview {
-    grid-column: 1 / -1;
+  .pane {
+    grid-area: auto;
   }
-}
-@media (max-width: 720px) {
-  .layout {
-    grid-template-columns: 1fr;
+  .tabbar .preview-tab {
+    display: inline-block;
+  }
+  /* Show only the active tab's pane. */
+  .workspace[data-tab='gui'] .pane-text,
+  .workspace[data-tab='gui'] .pane-preview,
+  .workspace[data-tab='text'] .pane-editor,
+  .workspace[data-tab='text'] .pane-preview,
+  .workspace[data-tab='preview'] .pane-editor,
+  .workspace[data-tab='preview'] .pane-text {
+    display: none;
+  }
+
+  /* Bigger, calmer touch targets. */
+  .toolbar {
+    gap: 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .toolbar > * {
+    flex: 0 0 auto; /* keep widths; scroll the row instead of squeezing */
+  }
+  .tabbar button {
+    flex: 1;
+    padding: 10px 8px;
+  }
+  .wave-cell,
+  .cell-td {
+    width: 34px;
+    height: 36px;
+  }
+  .palette-btn {
+    min-width: 30px;
+    height: 30px;
+  }
+  .toolbar button,
+  .table-toolbar button {
+    padding: 7px 10px;
+  }
+  .name-input {
+    min-width: 92px;
   }
 }
