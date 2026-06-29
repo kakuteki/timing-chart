@@ -89,6 +89,8 @@ export interface EditorState {
   notice: string | null
   /** Increments on each file/document load — lets views reset transient UI. */
   loadEpoch: number
+  /** True while showing a shared-link snapshot that hasn't been edited yet. */
+  viewingShared: boolean
   /** Undo stack (previous model snapshots, oldest first). */
   past: WaveJson[]
   /** Redo stack (snapshots undone, most-recently-undone last). */
@@ -134,6 +136,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectedPath: null,
   notice: startNotice,
   loadEpoch: 0,
+  viewingShared: share.present && !!share.model,
   past: [],
   future: [],
 
@@ -148,6 +151,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       textBuffer: state.textFocused ? state.textBuffer : serializeModel(model),
       editSource: 'gui',
       parseError: state.textFocused ? state.parseError : null,
+      viewingShared: false,
     }))
   },
 
@@ -184,6 +188,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       // A text edit may have removed/reordered/inserted signals — drop the
       // selection unless it still points at the same signal.
       selectedPath: selectionSurvives(s.selectedPath, s.model, res.model!) ? s.selectedPath : null,
+      viewingShared: false,
     }))
   },
 
@@ -202,6 +207,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       // Fresh document — clear any selection pointing into the old one.
       selectedPath: null,
       loadEpoch: state.loadEpoch + 1,
+      viewingShared: false,
     }))
   },
 
@@ -219,6 +225,7 @@ export const useEditor = create<EditorState>((set, get) => ({
         lastValidModel: model,
         textBuffer: state.textFocused ? state.textBuffer : serializeModel(model),
         editSource: 'gui',
+        viewingShared: false,
       }
     })
   },

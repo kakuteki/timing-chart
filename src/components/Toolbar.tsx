@@ -24,6 +24,7 @@ export function Toolbar() {
   const redo = useEditor((s) => s.redo)
   const canUndo = useEditor((s) => s.past.length > 0)
   const canRedo = useEditor((s) => s.future.length > 0)
+  const viewingShared = useEditor((s) => s.viewingShared)
 
   const fileRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<number | undefined>(undefined)
@@ -165,6 +166,17 @@ export function Toolbar() {
       <div className="tb-group">
         <button onClick={share}>共有リンク</button>
       </div>
+
+      <span
+        className={viewingShared ? 'save-status shared' : 'save-status'}
+        title={
+          viewingShared
+            ? '共有リンクのスナップショットを表示中。編集すると自分の作業として自動保存されます'
+            : '編集内容はこのブラウザに自動保存されます'
+        }
+      >
+        {viewingShared ? '共有リンク表示中' : '自動保存'}
+      </span>
 
       <span className="toast-region" role="status" aria-live="polite">
         {toast && <span className="toast">{toast}</span>}
