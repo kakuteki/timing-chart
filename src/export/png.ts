@@ -14,7 +14,12 @@ export interface PngResult {
   effectiveScale: number
 }
 
-export async function svgToPngBlob(svg: SVGSVGElement, scale = 2, bg = '#ffffff'): Promise<PngResult> {
+export async function svgToPngBlob(
+  svg: SVGSVGElement,
+  scale = 2,
+  bg = '#ffffff',
+  transparent = false,
+): Promise<PngResult> {
   const raw = svgPixelSize(svg)
   // Guard against degenerate viewBox values (0/negative/NaN) before scaling.
   const width = Number.isFinite(raw.width) && raw.width > 0 ? raw.width : 600
@@ -42,9 +47,12 @@ export async function svgToPngBlob(svg: SVGSVGElement, scale = 2, bg = '#ffffff'
   canvas.height = Math.max(1, Math.round(height * eff))
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Canvas 2D コンテキストを取得できませんでした')
-  // WaveDrom SVG is transparent — fill with the skin's background.
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  // WaveDrom SVG is transparent — fill with the skin's background unless the
+  // caller wants a transparent PNG (suits light-coloured slides/docs).
+  if (!transparent) {
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+  }
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
 
   const blob = await new Promise<Blob>((resolve, reject) => {

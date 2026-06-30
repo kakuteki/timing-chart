@@ -93,6 +93,9 @@ export function SignalTable() {
   const [brush, setBrush] = useState<string | null>(null)
   // Roving-tabindex focus: which cell (signal-row index, tick) is keyboard-active.
   const [focusedCell, setFocusedCell] = useState<{ r: number; t: number } | null>(null)
+  // Touch paint mode (mobile opt-in). OFF by default so touch pans/scrolls the
+  // grid; ON lets a finger sweep-paint a run of cells (disables grid scroll).
+  const [paintMode, setPaintMode] = useState(false)
   // Disarm the brush AND reset keyboard focus when a new document is loaded.
   const loadEpoch = useEditor((s) => s.loadEpoch)
   useEffect(() => {
@@ -237,10 +240,10 @@ export function SignalTable() {
   const onCellPointerDown = (path: number[], tick: number, sigIndex: number, e: React.PointerEvent) => {
     if (e.button > 0) return // ignore right/middle mouse buttons
     lastPointerType.current = e.pointerType
-    if (e.pointerType === 'touch') {
-      // Let the browser pan/scroll the grid (touch-action: auto); a genuine tap
-      // — not a scroll — fires onClick, which performs the single-cell edit.
-      // Don't preventDefault or arm sweep-paint here.
+    if (e.pointerType === 'touch' && !paintMode) {
+      // Scroll mode (default): let the browser pan the grid; a genuine tap fires
+      // onClick, which performs the single-cell edit. In paint mode we fall
+      // through and arm a sweep just like a mouse.
       return
     }
     e.preventDefault() // avoid text selection / page scroll while sweeping
@@ -286,7 +289,7 @@ export function SignalTable() {
   )
 
   return (
-    <section className="signal-table">
+    <section className={paintMode ? 'signal-table paint-mode' : 'signal-table'}>
       <div className="pane-title">信号エディタ</div>
 
       {hasPeriodPhase && (
@@ -363,6 +366,17 @@ export function SignalTable() {
             ))}
           </div>
         </details>
+        <label
+          className="paint-mode-toggle"
+          title="オンにすると指のスワイプで連続して塗れます（オフは画面スクロール）"
+        >
+          <input
+            type="checkbox"
+            checked={paintMode}
+            onChange={(e) => setPaintMode(e.target.checked)}
+          />
+          スワイプで塗る
+        </label>
       </div>
 
       {signalPaths.length === 0 && (
@@ -520,10 +534,12 @@ export function SignalTable() {
                           }}
                           onClick={(e) => {
                             // Act on keyboard activation (Enter/Space → click with
-                            // detail 0) OR a touch tap (pointerdown was touch and
-                            // intentionally did nothing). A mouse click was already
-                            // handled on pointerdown, so ignore it here.
-                            if (e.detail !== 0 && lastPointerType.current !== 'touch') return
+                            // detail 0) OR a touch tap in SCROLL mode (pointerdown
+                            // intentionally did nothing). Mouse, and touch in paint
+                            // mode, were already handled on pointerdown.
+                            const touchTapInScroll =
+                              lastPointerType.current === 'touch' && !paintMode
+                            if (e.detail !== 0 && !touchTapInScroll) return
                             setSelectedPath(row.path)
                             setFocusedCell({ r: sigIndex, t })
                             applyCellAction(row.path, t, { altKey: e.altKey, shiftKey: e.shiftKey })

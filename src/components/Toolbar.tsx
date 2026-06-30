@@ -31,6 +31,7 @@ export function Toolbar() {
   const toastTimer = useRef<number | undefined>(undefined)
   const [clockKind, setClockKind] = useState<ClockKind>('P')
   const [pngScale, setPngScale] = useState(2)
+  const [pngTransparent, setPngTransparent] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [bridgeOn, setBridgeOn] = useState(false)
   const [bridgeStatus, setBridgeStatus] = useState<BridgeStatus>('disconnected')
@@ -84,7 +85,7 @@ export function Toolbar() {
     const svg = getLatestSvg()
     if (!svg) return flash('描画SVGが見つかりません')
     try {
-      const { blob, effectiveScale } = await svgToPngBlob(svg, pngScale, SKIN_BG[skinName])
+      const { blob, effectiveScale } = await svgToPngBlob(svg, pngScale, SKIN_BG[skinName], pngTransparent)
       downloadBlob(blob, fileName('png'))
       // The chart was too big for the requested scale — say so instead of
       // handing back a silently lower-resolution image.
@@ -105,7 +106,7 @@ export function Toolbar() {
       return flash('この環境では画像コピーに未対応です（PNG保存をご利用ください）')
     }
     try {
-      const { blob } = await svgToPngBlob(svg, pngScale, SKIN_BG[skinName])
+      const { blob } = await svgToPngBlob(svg, pngScale, SKIN_BG[skinName], pngTransparent)
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
       flash('画像をクリップボードにコピーしました')
     } catch {
@@ -202,6 +203,14 @@ export function Toolbar() {
         <button onClick={copyImage} title="図をPNG画像としてクリップボードにコピー（スライド等に貼り付け）">
           画像コピー
         </button>
+        <label className="png-opt" title="PNG/コピーの背景を透過にする（明るい資料向け）">
+          <input
+            type="checkbox"
+            checked={pngTransparent}
+            onChange={(e) => setPngTransparent(e.target.checked)}
+          />
+          透過
+        </label>
         <button onClick={share}>共有リンク</button>
       </div>
 
