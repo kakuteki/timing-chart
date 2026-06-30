@@ -135,6 +135,9 @@ export interface EditorState {
   loadModel: (model: WaveJson) => void
   /** Apply a model pushed from the bridge WITHOUT recording undo history. */
   applyRemote: (model: WaveJson) => void
+  /** Load a share model that arrived via a live URL hashchange (keeps the
+   *  `#d=` hash and shows it as a shared view; undoable). */
+  loadSharedFromHash: (model: WaveJson) => void
   setSkin: (skin: SkinName) => void
   setSelectedPath: (path: number[] | null) => void
   clearNotice: () => void
@@ -257,6 +260,25 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedPath: null,
       loadEpoch: state.loadEpoch + 1,
       viewingShared: false,
+    }))
+  },
+
+  loadSharedFromHash: (model) => {
+    // The user navigated to a `#d=` link in this tab — show it as a shared view.
+    // Keep the hash (don't detach) and push history so they can undo back to
+    // whatever they had open before.
+    lastCoalesceKey = null
+    set((state) => ({
+      ...histPush(state),
+      model,
+      lastValidModel: model,
+      textBuffer: state.textFocused ? state.textBuffer : serializeModel(model),
+      editSource: 'load',
+      parseError: state.textFocused ? state.parseError : null,
+      skinName: (model.config?.skin as SkinName) ?? 'default',
+      selectedPath: null,
+      loadEpoch: state.loadEpoch + 1,
+      viewingShared: true,
     }))
   },
 

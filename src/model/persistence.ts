@@ -19,17 +19,29 @@ export function serializeEnvelope(model: WaveJson): string {
  * model). Pure + tiny so the version-detection logic is unit-testable. A bare
  * WaveJSON has neither `v` nor `model`, so it can't be mistaken for an envelope.
  */
-export function unwrapEnvelope(parsed: unknown): unknown {
-  if (
-    parsed &&
+export function isEnvelope(parsed: unknown): parsed is { v: number; model: unknown } {
+  return (
+    !!parsed &&
     typeof parsed === 'object' &&
     !Array.isArray(parsed) &&
     'v' in parsed &&
     'model' in parsed
-  ) {
-    return (parsed as { model: unknown }).model
-  }
-  return parsed
+  )
+}
+
+export function unwrapEnvelope(parsed: unknown): unknown {
+  return isEnvelope(parsed) ? parsed.model : parsed
+}
+
+/**
+ * Apply forward migrations to the inner model based on its stored version.
+ * Identity today (only v=1 exists) — this is the extension point: when the
+ * model shape changes incompatibly, branch here (e.g. `if (v < 2) model =
+ * upgradeV1toV2(model)`). An unknown future v is read best-effort as-is, since
+ * WaveJSON fields are additive.
+ */
+function migrate(_v: number, model: unknown): unknown {
+  return model
 }
 
 /**
@@ -46,7 +58,9 @@ export function parseEnvelope(text: string): WaveJson | null {
     const r = parseModel(text)
     return r.ok && r.model ? r.model : null
   }
-  const candidate = unwrapEnvelope(parsed)
+  // Unwrap a versioned envelope and run version migrations on the inner model;
+  // a legacy bare model passes straight through.
+  const candidate = isEnvelope(parsed) ? migrate(parsed.v, parsed.model) : parsed
   // Reuse the model validator (signal array + lane field types) on the candidate.
   const r = parseModel(JSON.stringify(candidate))
   return r.ok && r.model ? r.model : null
