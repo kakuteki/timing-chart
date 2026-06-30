@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useEditor } from './state/store'
 import { flattenSignals } from './state/selectors'
+import { serializeModel } from './model/serialize'
+import { readShare } from './share/url'
 import { busHeadTicks } from './model/wave-codec'
 import { Toolbar } from './components/Toolbar'
 import { SignalTable } from './components/gui/SignalTable'
@@ -47,6 +49,22 @@ export default function App() {
       /* ignore */
     }
   }
+
+  // Load a share link that arrives via a live URL hashchange (pasting a #d= URL
+  // into this tab, or browser back/forward between share states). replaceState
+  // from our own share()/detach doesn't fire hashchange, so this won't loop.
+  useEffect(() => {
+    const onHash = () => {
+      const share = readShare()
+      if (!share.present || !share.model) return
+      const st = useEditor.getState()
+      if (serializeModel(st.model) === serializeModel(share.model)) return // no change
+      st.loadSharedFromHash(share.model)
+      st.flash('共有リンクを読み込みました（編集は「戻す」で元に戻せます）')
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   // While the help dialog is open, make the rest of the app inert so screen
   // readers and Tab/clicks can't reach the background behind the modal.
