@@ -55,6 +55,14 @@ body {
   align-items: center;
   gap: 6px;
 }
+.png-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 .tb-group label {
   display: flex;
   align-items: center;
@@ -1147,7 +1155,26 @@ body {
 }
 
 /* ---- Responsive: single column + 3-way tabs on phones/tablets ---- */
+/* Touch paint-mode toggle: only meaningful on touch/mobile (mouse always
+   drag-paints), so it's hidden on desktop and revealed in the mobile query. */
+.paint-mode-toggle {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
 @media (max-width: 860px) {
+  .paint-mode-toggle {
+    display: inline-flex;
+  }
+  /* While paint mode is on, stop the grid from scrolling so a finger sweep
+     paints a run instead of panning. */
+  .signal-table.paint-mode .wave-cell {
+    touch-action: none;
+  }
   .workspace {
     grid-template-columns: 1fr;
     overflow: auto;
