@@ -1,6 +1,7 @@
 // Bridge server tests (Node built-in runner): `npm test`
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import http from 'node:http'
 import { start } from '../bridge/server.mjs'
 
 let server
@@ -41,6 +42,34 @@ test('POST valid model then GET returns it', async () => {
 
 test('POST invalid shape → 400', async () => {
   assert.equal((await post({ nope: 1 })).status, 400)
+})
+
+// Raw http so we can set the otherwise-forbidden Origin / Host headers.
+const rawPost = (headers) =>
+  new Promise((resolve) => {
+    const u = new URL(base)
+    const req = http.request(
+      { hostname: u.hostname, port: u.port, path: '/model', method: 'POST', headers },
+      (res) => {
+        res.resume()
+        resolve(res.statusCode)
+      },
+    )
+    req.end(JSON.stringify({ signal: [] }))
+  })
+
+test('cross-origin POST is rejected (CSRF guard)', async () => {
+  // A no-preflight text/plain POST from a malicious page must not overwrite.
+  assert.equal(await rawPost({ 'Content-Type': 'text/plain', Origin: 'https://evil.example' }), 403)
+})
+
+test('allowed-origin and no-origin POSTs still work', async () => {
+  assert.equal(await rawPost({ 'Content-Type': 'application/json', Origin: 'http://localhost:5173' }), 200)
+  assert.equal(await rawPost({ 'Content-Type': 'application/json' }), 200) // curl-style, no Origin
+})
+
+test('non-loopback Host is rejected (DNS-rebinding guard)', async () => {
+  assert.equal(await rawPost({ 'Content-Type': 'application/json', Host: 'evil.example' }), 403)
 })
 
 test('POST signal with non-string wave → 400 (would crash the tab)', async () => {

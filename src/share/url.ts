@@ -3,6 +3,11 @@ import type { WaveJson } from '../model/wavejson'
 import { serializeEnvelope, parseEnvelope } from '../model/persistence'
 
 const HASH_KEY = 'd'
+// Reject absurdly large share payloads before/after decompression so a crafted
+// link can't blow up memory / hang the tab (decompression-bomb DoS). A real
+// chart compresses to well under these.
+const MAX_PAYLOAD = 1_000_000
+const MAX_JSON = 2_000_000
 
 /** Encode a model into a compressed share string for the URL hash. */
 export function encodeShare(model: WaveJson): string {
@@ -38,9 +43,10 @@ export interface ShareRead {
 export function readShare(): ShareRead {
   const payload = rawPayload()
   if (!payload) return { present: false, model: null }
+  if (payload.length > MAX_PAYLOAD) return { present: true, model: null } // oversized link
   try {
     const json = decompressFromEncodedURIComponent(payload)
-    if (!json) return { present: true, model: null }
+    if (!json || json.length > MAX_JSON) return { present: true, model: null }
     // Accepts the versioned envelope and a legacy bare-model share link.
     return { present: true, model: parseEnvelope(json) }
   } catch {

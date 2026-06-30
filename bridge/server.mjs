@@ -41,11 +41,24 @@ const MIME = {
   '.woff2': 'font/woff2',
 }
 
+/** A browser Origin we trust (localhost dev, the Pages app) — or no Origin at
+ *  all (curl / other non-browser tools, which can't be a CSRF vector). */
+function isAllowedOrigin(origin) {
+  return !origin || ALLOW_ORIGIN.test(origin) || origin === 'https://kakuteki.github.io'
+}
+
+/** Reject Host headers that aren't loopback — blocks DNS-rebinding, where a
+ *  malicious page resolves its own hostname to 127.0.0.1 and POSTs here. */
+function isAllowedHost(req) {
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase()
+  return host === '' || host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
+}
+
 function cors(req, res) {
   const origin = req.headers.origin
   if (!origin) {
     res.setHeader('Access-Control-Allow-Origin', '*') // non-browser caller (curl)
-  } else if (ALLOW_ORIGIN.test(origin) || origin === 'https://kakuteki.github.io') {
+  } else if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Vary', 'Origin')
   }
@@ -127,6 +140,15 @@ function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
     res.end()
+    return
+  }
+
+  // Reject cross-origin browser callers and non-loopback Hosts. A simple POST
+  // (text/plain, no preflight) would otherwise let any website overwrite the
+  // chart while the bridge is on; curl (no Origin) is unaffected.
+  if (!isAllowedOrigin(req.headers.origin) || !isAllowedHost(req)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end('forbidden')
     return
   }
 
